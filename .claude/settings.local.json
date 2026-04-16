@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version)",
+      "Bash(flutter create:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter clean:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(open -a Simulator)",
+      "Bash(flutter run:*)",
+      "Bash(pod install:*)",
+      "Bash(dart analyze:*)",
+      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFilter; print\\('PIL available'\\)\")",
+      "Bash(pip3 install:*)",
+      "Bash(cat)",
+      "Bash(python3 /tmp/gen_icon.py)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מדיניות פרטיות — My Contacts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f8f7ff;
+      color: #1a1a2e;
+      line-height: 1.7;
+    }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #6c63ff22;
+    }
+    .icon {
+      width: 60px; height: 60px;
+      background: linear-gradient(135deg, #6c63ff, #9b8fff);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+    h1 { font-size: 26px; font-weight: 800; color: #1a1a2e; }
+    .subtitle { font-size: 14px; color: #6b6b8a; margin-top: 3px; }
+    .updated {
+      display: inline-block;
+      background: #6c63ff15;
+      color: #6c63ff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 32px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 12px #6c63ff0d;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2 .emoji { font-size: 20px; }
+    p { color: #4a4a6a; font-size: 15px; margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul { color: #4a4a6a; font-size: 15px; padding-right: 20px; }
+    li { margin-bottom: 8px; }
+    .highlight {
+      background: #6c63ff08;
+      border-right: 3px solid #6c63ff;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 15px;
+      color: #4a4a6a;
+      margin-top: 12px;
+    }
+    .contact-box {
+      background: linear-gradient(135deg, #6c63ff, #9b8fff);
+      border-radius: 16px;
+      padding: 28px;
+      color: white;
+      text-align: center;
+    }
+    .contact-box h2 { color: white; justify-content: center; }
+    .contact-box p { color: rgba(255,255,255,0.85); }
+    .contact-box a {
+      color: white;
+      font-weight: 700;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,0.4);
+    }
+    .badge {
+      display: inline-block;
+      background: #6c63ff15;
+      color: #6c63ff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="icon">👤</div>
+    <div>
+      <h1>מדיניות פרטיות</h1>
+      <div class="subtitle">אפליקציית My Contacts</div>
+    </div>
+  </div>
+
+  <div class="updated">עודכן לאחרונה: אפריל 2025</div>
+
+  <div class="card">
+    <h2><span class="emoji">🔒</span> המידע שלך נשמר אצלך</h2>
+    <p>
+      אפליקציית <strong>My Contacts</strong> מיועדת לניהול אנשי קשר מועדפים שלך.
+      כל המידע נשמר <strong>באופן מקומי על המכשיר שלך בלבד</strong> ולא מועבר
+      לאף שרת חיצוני.
+    </p>
+    <div class="highlight">
+      האפליקציה לא אוספת, לא מאחסנת ולא משתפת מידע אישי עם צדדים שלישיים.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="emoji">📱</span> גישה לתכונות המכשיר</h2>
+    <p>האפליקציה מבקשת גישה לתכונות הבאות, <strong>רק כשאתה בוחר להשתמש בהן</strong>:</p>
+    <ul>
+      <li>
+        <span class="badge">אנשי קשר</span>
+        ייבוא אנשי קשר מהטלפון — <em>בבקשה מפורשת שלך בלבד</em>
+      </li>
+      <li>
+        <span class="badge">מצלמה</span>
+        צילום תמונת פרופיל לאיש קשר
+      </li>
+      <li>
+        <span class="badge">גלריה</span>
+        בחירת תמונה קיימת לאיש קשר
+      </li>
+      <li>
+        <span class="badge">התראות</span>
+        תזכורות יום הולדת — ניתן לביטול בכל עת
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><span class="emoji">💾</span> אחסון מידע</h2>
+    <p>כל הנתונים (אנשי קשר, תמונות, הגדרות) נשמרים <strong>בלבד על המכשיר שלך</strong>:</p>
+    <ul>
+      <li>שמות, טלפונים, כינויים, ימי הולדת — נשמרים ב-Hive (מסד נתונים מקומי)</li>
+      <li>תמונות — נשמרות בתיקיית האפליקציה הפרטית על המכשיר</li>
+      <li>לא נשלח שום מידע לאינטרנט</li>
+    </ul>
+    <div class="highlight">
+      גיבוי ייצוא (JSON) נשמר רק לפי בקשתך המפורשת, ורק במיקום שתבחר.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="emoji">🔔</span> התראות</h2>
+    <p>
+      האפליקציה יכולה לשלוח התראות מקומיות לתזכורות ימי הולדת.
+      ההתראות מעובדות <strong>לחלוטין על המכשיר</strong> — אין שרת מעורב.
+    </p>
+    <p>
+      ניתן להשבית את ההתראות בכל עת דרך <strong>הגדרות iPhone ← התראות ← My Contacts</strong>.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2><span class="emoji">👶</span> פרטיות ילדים</h2>
+    <p>
+      האפליקציה אינה מיועדת לילדים מתחת לגיל 4, ואינה אוספת מידע מילדים.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2><span class="emoji">🔄</span> שינויים במדיניות</h2>
+    <p>
+      אם תחול שינוי במדיניות הפרטיות, נעדכן את תאריך "עודכן לאחרונה" בראש העמוד.
+      המשך השימוש באפליקציה לאחר שינוי מהווה הסכמה למדיניות העדכנית.
+    </p>
+  </div>
+
+  <div class="contact-box">
+    <h2><span class="emoji">✉️</span> יצירת קשר</h2>
+    <p>
+      שאלות לגבי הפרטיות? נשמח לעזור:<br><br>
+      <a href="mailto:your@email.com">your@email.com</a>
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
