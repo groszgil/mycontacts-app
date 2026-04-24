@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/app_contact.dart';
 import '../models/category.dart';
 import '../models/app_settings.dart';
@@ -218,6 +220,13 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () => setState(() => _isReordering = !_isReordering),
           ),
           const SizedBox(width: 8),
+          // Import device favorites
+          _IconBtn(
+            icon: Icons.group_add_rounded,
+            isDark: isDark,
+            onTap: _importDeviceFavorites,
+          ),
+          const SizedBox(width: 8),
           // Overflow menu
           _IconBtn(
             icon: Icons.more_vert_rounded,
@@ -234,6 +243,21 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => CupertinoActionSheet(
         actions: [
+          // ── ייבוא מועדפים מהמכשיר ─────────────────────────────────
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _importDeviceFavorites();
+            },
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.group_add_rounded, size: 20),
+                SizedBox(width: 8),
+                Text('ייבוא מועדפים מהמכשיר'),
+              ],
+            ),
+          ),
           // ── הוסף ידנית ─────────────────────────────────────────────
           CupertinoActionSheetAction(
             onPressed: () {
@@ -524,9 +548,9 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           GestureDetector(
-            onTap: _navigateToAdd,
+            onTap: _navigateToImport,
             child: _PulsingCircle(
-              icon: Icons.person_add_rounded,
+              icon: Icons.contacts_rounded,
               color: primary,
               size: 100,
             ),
@@ -542,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : AppTheme.textDark),
           ),
           const SizedBox(height: 8),
-          const Text('לחץ על הסמל או על + כדי להוסיף',
+          const Text('לחץ לבחירת איש קשר מהמכשיר',
               style: TextStyle(fontSize: 15, color: AppTheme.textLight)),
           const SizedBox(height: 28),
           Row(
@@ -753,9 +777,9 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           GestureDetector(
-            onTap: _navigateToAdd,
+            onTap: _navigateToImport,
             child: _PulsingCircle(
-              icon: Icons.person_add_rounded,
+              icon: Icons.contacts_rounded,
               color: primary,
               size: 90,
             ),
@@ -770,7 +794,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'לחץ על הסמל או על + כדי להוסיף',
+            'לחץ לבחירת איש קשר מהמכשיר',
             style: TextStyle(fontSize: 13, color: AppTheme.textLight),
           ),
           const SizedBox(height: 24),
@@ -811,6 +835,201 @@ class _HomeScreenState extends State<HomeScreen> {
       label: const Text('הוספת איש קשר',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
     );
+  }
+
+  // ── Import device favorites (starred contacts) ────────────────────────────
+
+  Future<void> _importDeviceFavorites() async {
+    // Request contacts permission
+    final status =
+        await FlutterContacts.permissions.request(PermissionType.read);
+    final granted = status == PermissionStatus.granted ||
+        status == PermissionStatus.limited;
+    if (!granted || !mounted) return;
+
+    // Fetch contacts with the favorite (starred) flag
+    final all = await FlutterContacts.getAll(
+      properties: {
+        ContactProperty.phone,
+        ContactProperty.name,
+        ContactProperty.favorite,
+      },
+    );
+
+    // Only starred contacts not yet imported
+    final importedPhoneIds = StorageService.getSyncMap().values.toSet();
+    final favorites = all
+        .where((c) =>
+            c.android?.isFavorite == true &&
+            c.phones.isNotEmpty &&
+            (c.displayName ?? '').isNotEmpty &&
+            !importedPhoneIds.contains(c.id ?? ''))
+        .toList();
+
+    if (!mounted) return;
+
+    if (favorites.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('לא נמצאו מועדפים חדשים מהמכשיר'),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    // Confirmation dialog
+    final names = favorites
+        .take(3)
+        .map((c) => c.displayName ?? '')
+        .where((n) => n.isNotEmpty)
+        .join('، ');
+    final more = favorites.length > 3 ? ' ועוד ${favorites.length - 3}' : '';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('ייבוא ${favorites.length} מועדפים',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          content: Text(
+            'נמצאו ${favorites.length} מועדפים מהמכשיר:\n$names$more\n\nלייבא אותם לרשימה?',
+            style: const TextStyle(fontSize: 15, height: 1.55),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('ביטול'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('ייבא'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    // Import each starred contact — fetch full details for notes/events
+    int added = 0;
+    final existingCount = StorageService.getAllContacts().length;
+
+    for (final c in favorites) {
+      final name = c.displayName ?? '';
+      if (name.isEmpty || c.phones.isEmpty) continue;
+
+      // Fetch full details (notes, events) for this individual contact
+      Contact full = c;
+      if (c.id != null) {
+        final fetched = await FlutterContacts.get(
+          c.id!,
+          properties: {
+            ContactProperty.phone,
+            ContactProperty.note,
+            ContactProperty.event,
+          },
+        );
+        if (fetched != null) full = fetched;
+      }
+
+      final phones = full.phones.map((p) => p.number).toList();
+      final labels = full.phones.map((p) {
+        switch (p.label.label) {
+          case PhoneLabel.mobile:
+          case PhoneLabel.iPhone:
+          case PhoneLabel.workMobile:
+            return 'נייד';
+          case PhoneLabel.work:
+          case PhoneLabel.workFax:
+            return 'עבודה';
+          case PhoneLabel.home:
+          case PhoneLabel.homeFax:
+            return 'בית';
+          default:
+            return 'כללי';
+        }
+      }).toList();
+
+      final notes = full.notes.isNotEmpty
+          ? full.notes
+              .map((n) => n.note)
+              .where((n) => n.isNotEmpty)
+              .join('\n')
+          : null;
+
+      DateTime? birthday;
+      DateTime? anniversary;
+      for (final event in full.events) {
+        if (event.label.label == EventLabel.birthday && birthday == null) {
+          try {
+            birthday =
+                DateTime(event.year ?? 2000, event.month, event.day);
+          } catch (_) {}
+        } else if (event.label.label == EventLabel.anniversary &&
+            anniversary == null) {
+          try {
+            anniversary =
+                DateTime(event.year ?? 2000, event.month, event.day);
+          } catch (_) {}
+        }
+      }
+
+      final appContact = AppContact(
+        id: const Uuid().v4(),
+        name: name,
+        primaryPhone: phones.first,
+        phones: phones,
+        phoneLabels: labels,
+        categoryIds: ['all'],
+        sortOrder: existingCount + added,
+        notes: notes,
+        birthdayMillis: birthday?.millisecondsSinceEpoch,
+        anniversaryMillis: anniversary?.millisecondsSinceEpoch,
+      );
+      await StorageService.saveContact(appContact);
+      final cid = full.id ?? '';
+      if (cid.isNotEmpty) {
+        await StorageService.addToSyncMap(appContact.id, cid);
+      }
+      added++;
+    }
+
+    if (!mounted) return;
+    if (added > 0) {
+      final addedNames = favorites
+          .take(3)
+          .map((c) => c.displayName ?? '')
+          .where((n) => n.isNotEmpty)
+          .join('، ');
+      final suffix = added > 3 ? ' ועוד ${added - 3}' : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('יובאו $added מועדפים: $addedNames$suffix'),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      setState(() {});
+    }
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────

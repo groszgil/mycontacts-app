@@ -11,7 +11,6 @@ import 'device_contacts_screen.dart';
 import 'dialer_screen.dart';
 import 'birthdays_screen.dart';
 import 'anniversaries_screen.dart';
-import 'import_contacts_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -28,106 +27,8 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     // Run after the first frame so the scaffold/navigator is fully mounted.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _checkFirstLaunch();
       await _runContactSync();
     });
-  }
-
-  // ── First-launch import prompt ────────────────────────────────────────────
-
-  Future<void> _checkFirstLaunch() async {
-    if (!StorageService.isFirstLaunch) return;
-    await StorageService.markFirstLaunchDone();
-    if (!mounted) return;
-
-    // Step 1: Request contacts permission upfront, before showing any dialog.
-    final status =
-        await FlutterContacts.permissions.request(PermissionType.read);
-    final granted = status == PermissionStatus.granted ||
-        status == PermissionStatus.limited;
-
-    // Mark rationale as shown so the import screen won't show it again.
-    if (!StorageService.hasShownContactsRationale) {
-      await StorageService.markContactsRationaleShown();
-    }
-
-    if (!granted || !mounted) return;
-
-    // Step 2: Ask whether the user wants to import favorites.
-    await _showFirstLaunchDialog();
-  }
-
-  Future<void> _showFirstLaunchDialog() async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.contacts_rounded,
-                    size: 36, color: AppTheme.primary),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'ייבוא מועדפים מהטלפון',
-                style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'האם תרצה לייבא אנשי קשר מועדפים מהטלפון שלך?\n\nבחר את אנשי הקשר שתרצה להוסיף לרשימה שלך וחסוך זמן.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14, color: AppTheme.textLight, height: 1.55),
-              ),
-            ],
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('לא עכשיו'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('כן, ייבא'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result == true && mounted) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ImportContactsScreen()),
-      );
-    }
   }
 
   // ── Ongoing contact sync ──────────────────────────────────────────────────
