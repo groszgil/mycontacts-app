@@ -220,13 +220,6 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () => setState(() => _isReordering = !_isReordering),
           ),
           const SizedBox(width: 8),
-          // Import device favorites
-          _IconBtn(
-            icon: Icons.group_add_rounded,
-            isDark: isDark,
-            onTap: _importDeviceFavorites,
-          ),
-          const SizedBox(width: 8),
           // Overflow menu
           _IconBtn(
             icon: Icons.more_vert_rounded,
@@ -243,21 +236,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => CupertinoActionSheet(
         actions: [
-          // ── ייבוא מועדפים מהמכשיר ─────────────────────────────────
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _importDeviceFavorites();
-            },
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.group_add_rounded, size: 20),
-                SizedBox(width: 8),
-                Text('ייבוא מועדפים מהמכשיר'),
-              ],
-            ),
-          ),
           // ── הוסף ידנית ─────────────────────────────────────────────
           CupertinoActionSheetAction(
             onPressed: () {
@@ -568,23 +546,6 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           const Text('לחץ לבחירת איש קשר מהמכשיר',
               style: TextStyle(fontSize: 15, color: AppTheme.textLight)),
-          const SizedBox(height: 28),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _navigateToImport,
-                icon: const Icon(Icons.contacts_rounded, size: 18),
-                label: const Text('ייבוא מהטלפון'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: _navigateToAdd,
-                icon: const Icon(Icons.person_add_rounded, size: 18),
-                label: const Text('הוסף ידנית'),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -796,23 +757,6 @@ class _HomeScreenState extends State<HomeScreen> {
           const Text(
             'לחץ לבחירת איש קשר מהמכשיר',
             style: TextStyle(fontSize: 13, color: AppTheme.textLight),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _navigateToImport,
-                icon: const Icon(Icons.contacts_rounded, size: 18),
-                label: const Text('ייבוא מהטלפון'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: _navigateToAdd,
-                icon: const Icon(Icons.person_add_rounded, size: 18),
-                label: const Text('הוסף ידנית'),
-              ),
-            ],
           ),
         ],
       ),

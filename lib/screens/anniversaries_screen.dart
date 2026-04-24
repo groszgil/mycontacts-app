@@ -6,7 +6,6 @@ import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import 'contact_detail_screen.dart';
 import 'add_edit_contact_screen.dart';
-import 'import_contacts_screen.dart';
 
 class AnniversariesScreen extends StatefulWidget {
   const AnniversariesScreen({super.key});
@@ -140,39 +139,6 @@ class _AnniversariesScreenState extends State<AnniversariesScreen> {
               'הוסף יום נישואין בעת עריכת איש קשר',
               style: TextStyle(fontSize: 14, color: AppTheme.textLight),
               textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const ImportContactsScreen()),
-              ),
-              child: Builder(builder: (ctx) {
-                final p = AppTheme.primaryOf(ctx);
-                return Column(
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: p.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.person_search_rounded,
-                          size: 30, color: p),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'ייבא אנשי קשר',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: p,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                );
-              }),
             ),
           ],
         ),

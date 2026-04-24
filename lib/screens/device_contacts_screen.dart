@@ -433,8 +433,8 @@ class _ContactTile extends StatelessWidget {
     if (name.isEmpty) return '?';
     final parts = name.trim().split(' ');
     if (parts.length >= 2) {
-      final a = parts.last.isNotEmpty ? parts.last[0] : '';
-      final b = parts.first.isNotEmpty ? parts.first[0] : '';
+      final a = parts.first.isNotEmpty ? parts.first[0] : '';
+      final b = parts.last.isNotEmpty ? parts.last[0] : '';
       return '$a$b';
     }
     return name[0];
@@ -565,8 +565,8 @@ class _ContactActionsSheet extends StatelessWidget {
     if (name.isEmpty) return '?';
     final parts = name.trim().split(' ');
     if (parts.length >= 2) {
-      final a = parts.last.isNotEmpty ? parts.last[0] : '';
-      final b = parts.first.isNotEmpty ? parts.first[0] : '';
+      final a = parts.first.isNotEmpty ? parts.first[0] : '';
+      final b = parts.last.isNotEmpty ? parts.last[0] : '';
       return '$a$b';
     }
     return name[0];

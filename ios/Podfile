@@ -40,12 +40,62 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
-    # Force all pods to use iOS 13.0+ — eliminates deprecated-API warnings
-    # from DKImagePickerController, SDWebImage, SwiftyGif, file_picker, etc.
     target.build_configurations.each do |config|
+      # Force all pods to use iOS 13.0+
       if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 13.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       end
+
+      # Ensure CocoaPods targets generate dSYM files in Release/Archive builds.
+      config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'
     end
+  end
+
+  # ── Fix: generate missing dSYMs for Flutter-built frameworks ──────────────
+  # objective_c.framework (and similar Dart FFI frameworks) are compiled by
+  # Flutter's xcode_backend.sh, NOT by CocoaPods, so the build-settings change
+  # above does not reach them.  We inject a Run Script build phase into the
+  # Runner target that calls dsymutil after every Release/Archive build.
+  runner_project = installer.aggregate_targets
+                            .find { |t| t.name == 'Pods-Runner' }
+                            &.user_project
+  runner_project ||= installer.aggregate_targets.first&.user_project
+  next unless runner_project
+
+  runner_target = runner_project.targets.find { |t| t.name == 'Runner' }
+  next unless runner_target
+
+  phase_name = 'Generate dSYMs for Flutter FFI frameworks'
+  exists = runner_target.shell_script_build_phases.any? { |p| p.name == phase_name }
+  unless exists
+    phase = runner_target.new_shell_script_build_phase(phase_name)
+    phase.shell_script = <<~'SHELL'
+      # Generates dSYM files for frameworks built by Flutter's xcode_backend
+      # (e.g. objective_c.framework) that are absent from the archive dSYMs
+      # folder, causing App Store Connect upload to fail.
+      set -euo pipefail
+
+      generate_dsym() {
+        local framework_name="$1"
+        # Search common locations where Flutter places embedded frameworks
+        for search_dir in \
+          "${BUILT_PRODUCTS_DIR}" \
+          "${TARGET_BUILD_DIR}" \
+          "${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Frameworks"; do
+          local binary="${search_dir}/${framework_name}.framework/${framework_name}"
+          if [ -f "$binary" ]; then
+            local dsym_out="${DWARF_DSYM_FOLDER_PATH}/${framework_name}.framework.dSYM"
+            xcrun dsymutil "$binary" --out "$dsym_out" 2>/dev/null && \
+              echo "✔ Generated dSYM: ${framework_name}.framework.dSYM" || true
+            return
+          fi
+        done
+      }
+
+      generate_dsym "objective_c"
+    SHELL
+    phase.always_out_of_date = '1'
+    runner_project.save
+    puts '✔ Injected "Generate dSYMs for Flutter FFI frameworks" build phase'
   end
 end

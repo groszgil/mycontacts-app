@@ -669,7 +669,7 @@ class StorageService {
   static String _initials(String name) {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) {
-      return '${parts.last[0]}${parts.first[0]}';
+      return '${parts.first[0]}${parts.last[0]}';
     }
     return name.isNotEmpty ? name[0] : '?';
   }

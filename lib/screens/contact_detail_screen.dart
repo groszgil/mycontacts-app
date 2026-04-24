@@ -21,7 +21,7 @@ class ContactDetailScreen extends StatelessWidget {
   String get _initials {
     final parts = contact.name.trim().split(' ');
     if (parts.length >= 2) {
-      return '${parts.last[0]}${parts.first[0]}';
+      return '${parts.first[0]}${parts.last[0]}';
     }
     return contact.name.isNotEmpty ? contact.name[0] : '?';
   }
