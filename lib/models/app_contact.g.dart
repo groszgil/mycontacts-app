@@ -55,13 +55,17 @@ class AppContactAdapter extends TypeAdapter<AppContact> {
       nickname: fields[14] as String?,
       birthdayMillis: (fields[15] as num?)?.toInt(),
       lastContactedMillis: (fields[16] as num?)?.toInt(),
+      anniversaryMillis: (fields[17] as num?)?.toInt(),
+      originalPhotoPath: fields[18] as String?,
+      address: fields[19] as String?,
+      customEventsJson: fields[20] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppContact obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -95,7 +99,15 @@ class AppContactAdapter extends TypeAdapter<AppContact> {
       ..writeByte(15)
       ..write(obj.birthdayMillis)
       ..writeByte(16)
-      ..write(obj.lastContactedMillis);
+      ..write(obj.lastContactedMillis)
+      ..writeByte(17)
+      ..write(obj.anniversaryMillis)
+      ..writeByte(18)
+      ..write(obj.originalPhotoPath)
+      ..writeByte(19)
+      ..write(obj.address)
+      ..writeByte(20)
+      ..write(obj.customEventsJson);
   }
 
   @override

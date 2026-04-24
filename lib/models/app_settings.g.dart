@@ -19,13 +19,19 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       fontScale: (fields[3] as num?)?.toDouble() ?? 1.0,
       accentColorValue: (fields[4] as num?)?.toInt() ?? 0xFF6C63FF,
       isListView: fields[5] as bool? ?? false,
+      birthdayReminderEnabled: fields[6] as bool? ?? true,
+      birthdayReminderDaysBefore: (fields[7] as num?)?.toInt() ?? 0,
+      birthdayReminderHour: (fields[8] as num?)?.toInt() ?? 9,
+      anniversaryReminderEnabled: fields[9] as bool? ?? false,
+      anniversaryReminderDaysBefore: (fields[10] as num?)?.toInt() ?? 0,
+      anniversaryReminderHour: (fields[11] as num?)?.toInt() ?? 9,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.gridColumns)
       ..writeByte(1)
@@ -37,7 +43,19 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(4)
       ..write(obj.accentColorValue)
       ..writeByte(5)
-      ..write(obj.isListView);
+      ..write(obj.isListView)
+      ..writeByte(6)
+      ..write(obj.birthdayReminderEnabled)
+      ..writeByte(7)
+      ..write(obj.birthdayReminderDaysBefore)
+      ..writeByte(8)
+      ..write(obj.birthdayReminderHour)
+      ..writeByte(9)
+      ..write(obj.anniversaryReminderEnabled)
+      ..writeByte(10)
+      ..write(obj.anniversaryReminderDaysBefore)
+      ..writeByte(11)
+      ..write(obj.anniversaryReminderHour);
   }
 
   @override

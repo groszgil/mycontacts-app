@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/app_contact.dart';
+import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
 
@@ -397,12 +398,11 @@ class _ContactCardState extends State<ContactCard> {
   }
 
   Widget _buildCircleAvatar(Color color, double size) {
-    if (widget.contact.localPhotoPath != null &&
-        File(widget.contact.localPhotoPath!).existsSync()) {
+    final photoPath = StorageService.resolvePhotoPath(widget.contact.localPhotoPath);
+    if (photoPath != null) {
       return CircleAvatar(
         radius: size / 2,
-        backgroundImage:
-            FileImage(File(widget.contact.localPhotoPath!)),
+        backgroundImage: FileImage(File(photoPath)),
       );
     }
     return Container(
@@ -433,12 +433,12 @@ class _ContactCardState extends State<ContactCard> {
   }
 
   Widget _buildPhotoArea(Color color) {
-    if (widget.contact.localPhotoPath != null &&
-        File(widget.contact.localPhotoPath!).existsSync()) {
+    final photoPath = StorageService.resolvePhotoPath(widget.contact.localPhotoPath);
+    if (photoPath != null) {
       return Hero(
         tag: 'contact_${widget.contact.id}',
         child: Image.file(
-          File(widget.contact.localPhotoPath!),
+          File(photoPath),
           fit: BoxFit.cover,
         ),
       );
@@ -708,11 +708,11 @@ class _ContactPreviewDialog extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    if (contact.localPhotoPath != null &&
-        File(contact.localPhotoPath!).existsSync()) {
+    final photoPath = StorageService.resolvePhotoPath(contact.localPhotoPath);
+    if (photoPath != null) {
       return CircleAvatar(
         radius: 50,
-        backgroundImage: FileImage(File(contact.localPhotoPath!)),
+        backgroundImage: FileImage(File(photoPath)),
       );
     }
     return Container(

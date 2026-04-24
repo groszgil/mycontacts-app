@@ -6,6 +6,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import 'add_edit_contact_screen.dart';
 
@@ -22,11 +23,24 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
   final _searchCtrl = TextEditingController();
   bool _loading = true;
   bool _permissionDenied = false;
+  // true only the very first time the user opens this screen
+  bool _showingRationale = false;
 
   @override
   void initState() {
     super.initState();
-    _loadContacts();
+    if (StorageService.hasShownContactsRationale) {
+      // Rationale already shown before — jump straight to fetching contacts.
+      // iOS will show its system permission dialog at most once; subsequent
+      // calls to request() return immediately without a dialog.
+      _loadContacts();
+    } else {
+      // First time: show the explanation screen before touching the OS dialog.
+      setState(() {
+        _loading = false;
+        _showingRationale = true;
+      });
+    }
   }
 
   @override
@@ -35,10 +49,15 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
     super.dispose();
   }
 
+  Future<void> _dismissRationale() async {
+    await StorageService.markContactsRationaleShown();
+    setState(() => _showingRationale = false);
+    await _loadContacts();
+  }
+
   Future<void> _loadContacts() async {
     setState(() {
-      _loading = true;
-      _permissionDenied = false;
+      _loading = true; _permissionDenied = false;
     });
 
     final status =
@@ -51,15 +70,21 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
         _loading = false;
         _permissionDenied = true;
       });
-      return;
+      return; // Stop here — do NOT re-prompt or auto-open Settings
     }
 
-    // Fetch phones, emails, and photo thumbnails
+    // Fetch phones, emails, thumbnail (for list avatars) AND full-resolution
+    // photo (so the imported photo can be cropped/adjusted later), events,
+    // and addresses.
     final contacts = await FlutterContacts.getAll(
       properties: {
         ContactProperty.phone,
         ContactProperty.email,
         ContactProperty.photoThumbnail,
+        ContactProperty.photoFullRes,
+        ContactProperty.event,
+        ContactProperty.address,
+        ContactProperty.note,
       },
     );
 
@@ -133,11 +158,52 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
     }
   }
 
+  /// Extract birthday from contact events
+  DateTime? _extractBirthday(Contact contact) {
+    for (final event in contact.events) {
+      if (event.label.label == EventLabel.birthday) {
+        try {
+          final year = event.year ?? 2000;
+          return DateTime(year, event.month, event.day);
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  /// Extract anniversary from contact events
+  DateTime? _extractAnniversary(Contact contact) {
+    for (final event in contact.events) {
+      if (event.label.label == EventLabel.anniversary) {
+        try {
+          final year = event.year ?? 2000;
+          return DateTime(year, event.month, event.day);
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  /// Extract the first address from contact.
+  /// Stored as "$street\n$city\n$zip" for structured display.
+  String? _extractAddress(Contact contact) {
+    if (contact.addresses.isEmpty) return null;
+    final addr = contact.addresses.first;
+    final street = addr.street ?? '';
+    final city   = addr.city ?? '';
+    final zip    = addr.postalCode ?? '';
+    if (street.isEmpty && city.isEmpty && zip.isEmpty) return null;
+    return '$street\n$city\n$zip';
+  }
+
   Future<void> _selectContact(Contact contact) async {
     String? photoPath;
-    final thumbnail = contact.photo?.thumbnail;
-    if (thumbnail != null && thumbnail.isNotEmpty) {
-      photoPath = await _savePhoto(thumbnail);
+    // Prefer full-size photo so the user can crop/adjust after import.
+    // Fall back to thumbnail if full-size wasn't returned by the OS.
+    final photoBytes =
+        contact.photo?.fullSize ?? contact.photo?.thumbnail;
+    if (photoBytes != null && photoBytes.isNotEmpty) {
+      photoPath = await _savePhoto(photoBytes);
     }
 
     final phones = contact.phones.map((ph) => ph.number).toList();
@@ -147,6 +213,15 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
     final emails = contact.emails.map((e) => e.address).toList();
     final emailLabels =
         contact.emails.map((e) => _mapEmailLabel(e.label.label)).toList();
+
+    final birthday = _extractBirthday(contact);
+    final anniversary = _extractAnniversary(contact);
+    final address = _extractAddress(contact);
+
+    // Extract notes from device contact
+    final notes = contact.notes.isNotEmpty
+        ? contact.notes.map((n) => n.note).where((n) => n.isNotEmpty).join('\n')
+        : null;
 
     final result = await Navigator.push<bool>(
       context,
@@ -158,6 +233,11 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
           prefillEmails: emails,
           prefillEmailLabels: emailLabels,
           prefillPhotoPath: photoPath,
+          prefillBirthday: birthday,
+          prefillAnniversary: anniversary,
+          prefillAddress: address,
+          prefillNotes: notes,
+          sourceContactId: contact.id,
         ),
       ),
     );
@@ -208,7 +288,66 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
     );
   }
 
+  Widget _buildRationale() {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.contacts_rounded, size: 40, color: primary),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'גישה לאנשי קשר',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textDark,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'כדי לייבא אנשי קשר מהטלפון שלך, '
+              'האפליקציה צריכה גישה לרשימת אנשי הקשר שלך.\n\n'
+              'הגישה משמשת אך ורק לייבוא — '
+              'לא מועבר מידע לשום גורם חיצוני.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textLight,
+                fontSize: 15,
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: 36),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _dismissRationale,
+                child: const Text(
+                  'המשך',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
+    if (_showingRationale) return _buildRationale();
+
     if (_loading) {
       return const Center(
         child: Column(
@@ -226,35 +365,38 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
     if (_permissionDenied) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.contacts_outlined,
                   size: 64, color: AppTheme.textLight),
               const SizedBox(height: 20),
-              const Text('נדרשת הרשאה',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark)),
-              const SizedBox(height: 10),
               const Text(
-                'כדי לייבא אנשי קשר יש לאשר גישה לאנשי הקשר של הטלפון בהגדרות.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textLight, fontSize: 15),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () async {
-                  await FlutterContacts.permissions.openSettings();
-                },
-                child: const Text('פתח הגדרות'),
+                'אין גישה לאנשי קשר',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textDark),
               ),
               const SizedBox(height: 12),
+              const Text(
+                'לא ניתן לייבא אנשי קשר ללא הרשאת גישה.\n\n'
+                'כדי לאפשר גישה: פתח הגדרות ← פרטיות ← אנשי קשר ← הפעל עבור האפליקציה.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: AppTheme.textLight, fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              // Subtle text link — not a primary CTA button
               TextButton(
-                onPressed: _loadContacts,
-                child: const Text('נסה שוב'),
+                onPressed: () => FlutterContacts.permissions.openSettings(),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.textLight,
+                  textStyle: const TextStyle(
+                      fontSize: 13, decoration: TextDecoration.underline),
+                ),
+                child: const Text('עבור להגדרות'),
               ),
             ],
           ),
@@ -287,7 +429,8 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
         final contact = _filtered[index];
         final name = contact.displayName ?? '';
         final phone = contact.phones.first.number;
-        final thumbBytes = contact.photo?.thumbnail;
+        // Use thumbnail for list avatars (small/fast); fullSize used on import.
+        final thumbBytes = contact.photo?.thumbnail ?? contact.photo?.fullSize;
         final hasPhoto = thumbBytes != null && thumbBytes.isNotEmpty;
         final initials = _initials(name);
         final colorIndex = name.isNotEmpty
@@ -323,15 +466,14 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
           ),
           title: Text(
             name.isEmpty ? phone : name,
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textDark,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
                 fontSize: 16),
           ),
-          subtitle: Text(
+          subtitle: name.isEmpty ? null : Text(
             phone,
-            style:
-                const TextStyle(color: AppTheme.textLight, fontSize: 13),
+            style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
           ),
           trailing: Builder(builder: (ctx) {
             final primary = Theme.of(ctx).colorScheme.primary;

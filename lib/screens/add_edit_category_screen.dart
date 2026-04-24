@@ -49,10 +49,11 @@ class _AddEditCategoryScreenState extends State<AddEditCategoryScreen> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.category != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : AppTheme.surface,
         appBar: AppBar(
           title: Text(isEdit ? 'עריכת קטגוריה' : 'קטגוריה חדשה'),
           actions: [

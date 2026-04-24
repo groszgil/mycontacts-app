@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import 'home_screen.dart';
-import 'settings_screen.dart';
-import 'about_screen.dart';
+import 'device_contacts_screen.dart';
+import 'dialer_screen.dart';
+import 'birthdays_screen.dart';
+import 'anniversaries_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -14,6 +18,13 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
+  Future<void> _callEmergency() async {
+    final phone = StorageService.emergencyContactPhone;
+    if (phone == null || phone.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -24,11 +35,30 @@ class _MainShellState extends State<MainShell> {
         index: _selectedIndex,
         children: const [
           HomeScreen(),
-          SettingsScreen(),
-          AboutScreen(),
+          DeviceContactsScreen(),
+          DialerScreen(),
+          BirthdaysScreen(),
+          AnniversariesScreen(),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(isDark, primary),
+      // SOS floating button — visible only when emergency contact is configured
+      floatingActionButton: ValueListenableBuilder<bool>(
+        valueListenable: StorageService.emergencyEnabledNotifier,
+        builder: (context, enabled, _) {
+          if (!enabled) return const SizedBox.shrink();
+          return FloatingActionButton(
+            heroTag: 'sos_fab',
+            onPressed: _callEmergency,
+            backgroundColor: const Color(0xFFE53935),
+            foregroundColor: Colors.white,
+            elevation: 6,
+            tooltip: 'SOS — ${StorageService.emergencyContactName ?? ''}',
+            child: const Icon(Icons.sos_rounded, size: 30),
+          );
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 
@@ -58,34 +88,50 @@ class _MainShellState extends State<MainShell> {
         elevation: 0,
         selectedItemColor: primary,
         unselectedItemColor: AppTheme.textLight,
-        selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w700, fontSize: 11),
-        unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w500, fontSize: 11),
+        selectedLabelStyle:
+            const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
+        unselectedLabelStyle:
+            const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
         items: [
           BottomNavigationBarItem(
             icon: _NavIcon(
-              icon: Icons.contacts_rounded,
+              icon: Icons.star_rounded,
               selected: _selectedIndex == 0,
               primary: primary,
+            ),
+            label: 'מועדפים',
+          ),
+          BottomNavigationBarItem(
+            icon: _NavIcon(
+              icon: Icons.people_rounded,
+              selected: _selectedIndex == 1,
+              primary: const Color(0xFF42A5F5),
             ),
             label: 'אנשי קשר',
           ),
           BottomNavigationBarItem(
             icon: _NavIcon(
-              icon: Icons.settings_rounded,
-              selected: _selectedIndex == 1,
-              primary: primary,
+              icon: Icons.dialpad_rounded,
+              selected: _selectedIndex == 2,
+              primary: const Color(0xFF4CAF50),
             ),
-            label: 'הגדרות',
+            label: 'חייגן',
           ),
           BottomNavigationBarItem(
             icon: _NavIcon(
-              icon: Icons.info_outline_rounded,
-              selected: _selectedIndex == 2,
-              primary: primary,
+              icon: Icons.cake_rounded,
+              selected: _selectedIndex == 3,
+              primary: Colors.orange,
             ),
-            label: 'אודות',
+            label: 'ימי הולדת',
+          ),
+          BottomNavigationBarItem(
+            icon: _NavIcon(
+              icon: Icons.favorite_rounded,
+              selected: _selectedIndex == 4,
+              primary: const Color(0xFFE91E63),
+            ),
+            label: 'נישואין',
           ),
         ],
       ),

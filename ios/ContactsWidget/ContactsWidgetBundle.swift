@@ -5,5 +5,6 @@ import SwiftUI
 struct ContactsWidgetBundle: WidgetBundle {
     var body: some Widget {
         ContactsWidget()
+        EmergencyWidget()
     }
 }

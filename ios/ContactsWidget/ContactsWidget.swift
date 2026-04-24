@@ -243,3 +243,172 @@ extension Color {
         self.init(red: r, green: g, blue: b)
     }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// MARK: - Emergency Widget
+// ════════════════════════════════════════════════════════════════════════════
+
+struct EmergencyContact: Codable {
+    let name: String
+    let phone: String
+    let enabled: Bool
+}
+
+struct EmergencyEntry: TimelineEntry {
+    let date: Date
+    let contact: EmergencyContact?
+}
+
+struct EmergencyProvider: TimelineProvider {
+    func placeholder(in context: Context) -> EmergencyEntry {
+        EmergencyEntry(date: Date(),
+                       contact: EmergencyContact(name: "ישראל ישראלי",
+                                                 phone: "050-0000000",
+                                                 enabled: true))
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (EmergencyEntry) -> Void) {
+        completion(loadEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<EmergencyEntry>) -> Void) {
+        completion(Timeline(entries: [loadEntry()], policy: .never))
+    }
+
+    private func loadEntry() -> EmergencyEntry {
+        guard
+            let defaults = UserDefaults(suiteName: "group.com.mycontacts.myContacts"),
+            let json = defaults.string(forKey: "emergency_json"),
+            let data = json.data(using: .utf8),
+            let contact = try? JSONDecoder().decode(EmergencyContact.self, from: data),
+            contact.enabled, !contact.phone.isEmpty
+        else {
+            return EmergencyEntry(date: Date(), contact: nil)
+        }
+        return EmergencyEntry(date: Date(), contact: contact)
+    }
+}
+
+// ── Emergency views ───────────────────────────────────────────────────────
+
+struct EmergencyWidgetView: View {
+    var entry: EmergencyEntry
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        if let contact = entry.contact {
+            let callURL = URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!
+            Link(destination: callURL) {
+                emergencyBody(contact: contact)
+            }
+        } else {
+            disabledBody
+        }
+    }
+
+    @ViewBuilder
+    func emergencyBody(contact: EmergencyContact) -> some View {
+        switch family {
+        case .accessoryCircular:
+            ZStack {
+                AccessoryWidgetBackground()
+                VStack(spacing: 2) {
+                    Image(systemName: "sos")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundColor(.red)
+                    Text(firstName(contact.name))
+                        .font(.system(size: 8, weight: .semibold))
+                        .lineLimit(1)
+                }
+            }
+        case .accessoryRectangular:
+            HStack(spacing: 8) {
+                Image(systemName: "sos")
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundColor(.red)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("חירום")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.red)
+                    Text(contact.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Text(contact.phone)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .environment(\.layoutDirection, .rightToLeft)
+        default:
+            ZStack {
+                // Red gradient background
+                LinearGradient(
+                    colors: [Color(hex: 0xE53935), Color(hex: 0xB71C1C)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                VStack(spacing: 10) {
+                    // SOS icon
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 60, height: 60)
+                        Image(systemName: "sos")
+                            .font(.system(size: 30, weight: .black))
+                            .foregroundColor(.white)
+                    }
+                    // Contact name
+                    Text(contact.name)
+                        .font(.system(size: family == .systemSmall ? 13 : 16,
+                                      weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    // "גע לחיוג"
+                    Text("גע לחיוג חירום")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding()
+            }
+            .environment(\.layoutDirection, .rightToLeft)
+        }
+    }
+
+    var disabledBody: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "sos")
+                .font(.system(size: 28, weight: .black))
+                .foregroundColor(.gray)
+            Text("לא הוגדר\nאיש קשר חירום")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .widgetURL(URL(string: "mycontacts://open"))
+    }
+
+    func firstName(_ name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+}
+
+struct EmergencyWidget: Widget {
+    let kind = "EmergencyWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: EmergencyProvider()) { entry in
+            EmergencyWidgetView(entry: entry)
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+        .configurationDisplayName("כפתור חירום")
+        .description("חיוג מהיר לאיש קשר חירום")
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .accessoryCircular,
+            .accessoryRectangular,
+        ])
+    }
+}

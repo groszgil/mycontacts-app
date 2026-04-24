@@ -1,6 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 import '../models/app_contact.dart';
 import '../models/category.dart';
 import '../models/app_settings.dart';
@@ -11,8 +16,187 @@ class StorageService {
   static const String _settingsBox = 'settings';
   static const String _appGroup = 'group.com.mycontacts.myContacts';
 
+  /// Cached documents directory path — resolved once at init, used for photo
+  /// path resolution so we don't need async in widget builds.
+  static String? _appDocPath;
+
+  // ── App JSON config (emergency contact + biometric lock) ─────────────────
+
+  static Map<String, dynamic>? _cachedConfig;
+
+  static String get _configPath =>
+      p.join(_appDocPath!, '.app_config.json');
+
+  static Map<String, dynamic> _readConfig() {
+    if (_cachedConfig != null) return _cachedConfig!;
+    try {
+      final f = File(_configPath);
+      if (!f.existsSync()) return _cachedConfig = {};
+      _cachedConfig = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      return _cachedConfig!;
+    } catch (_) {
+      return _cachedConfig = {};
+    }
+  }
+
+  static Future<void> _writeConfig(Map<String, dynamic> config) async {
+    _cachedConfig = Map<String, dynamic>.from(config);
+    await File(_configPath).writeAsString(jsonEncode(config));
+  }
+
+  /// Notifier for emergency SOS feature — updated whenever config changes.
+  static final ValueNotifier<bool> emergencyEnabledNotifier =
+      ValueNotifier(false);
+
+  /// Notifier for app lock feature — updated whenever config changes.
+  static final ValueNotifier<bool> appLockEnabledNotifier =
+      ValueNotifier(false);
+
+  // ── Emergency contact ─────────────────────────────────────────────────────
+
+  static bool get isEmergencyEnabled {
+    if (_appDocPath == null) return false;
+    return _readConfig()['emergencyEnabled'] as bool? ?? false;
+  }
+
+  static String? get emergencyContactName {
+    if (_appDocPath == null) return null;
+    return _readConfig()['emergencyName'] as String?;
+  }
+
+  static String? get emergencyContactPhone {
+    if (_appDocPath == null) return null;
+    return _readConfig()['emergencyPhone'] as String?;
+  }
+
+  static Future<void> setEmergencyConfig({
+    required bool enabled,
+    String? name,
+    String? phone,
+  }) async {
+    final c = _readConfig();
+    c['emergencyEnabled'] = enabled;
+    if (name != null) c['emergencyName'] = name;
+    if (phone != null) c['emergencyPhone'] = phone;
+    await _writeConfig(c);
+    emergencyEnabledNotifier.value = enabled;
+    // Sync to the shared App Group so the iOS widget can read it
+    await _updateEmergencyWidget(
+      enabled: enabled,
+      name: c['emergencyName'] as String? ?? '',
+      phone: c['emergencyPhone'] as String? ?? '',
+    );
+  }
+
+  static Future<void> _updateEmergencyWidget({
+    required bool enabled,
+    required String name,
+    required String phone,
+  }) async {
+    try {
+      await HomeWidget.saveWidgetData<String>(
+        'emergency_json',
+        jsonEncode({'name': name, 'phone': phone, 'enabled': enabled}),
+      );
+      await HomeWidget.updateWidget(
+        name: 'EmergencyWidget',
+        iOSName: 'EmergencyWidget',
+      );
+    } catch (_) {}
+  }
+
+  // ── Friendship reminder ───────────────────────────────────────────────────
+
+  static bool get friendshipReminderEnabled {
+    if (_appDocPath == null) return false;
+    return _readConfig()['friendshipReminderEnabled'] as bool? ?? false;
+  }
+
+  static int get friendshipReminderDaysBefore {
+    if (_appDocPath == null) return 0;
+    return (_readConfig()['friendshipReminderDaysBefore'] as num?)?.toInt() ?? 0;
+  }
+
+  static int get friendshipReminderHour {
+    if (_appDocPath == null) return 9;
+    return (_readConfig()['friendshipReminderHour'] as num?)?.toInt() ?? 9;
+  }
+
+  static Future<void> setFriendshipReminder({
+    required bool enabled,
+    int? daysBefore,
+    int? hour,
+  }) async {
+    final c = _readConfig();
+    c['friendshipReminderEnabled'] = enabled;
+    if (daysBefore != null) c['friendshipReminderDaysBefore'] = daysBefore;
+    if (hour != null) c['friendshipReminderHour'] = hour;
+    await _writeConfig(c);
+  }
+
+  // ── Custom event reminder timing (global) ─────────────────────────────────
+
+  static int get customEventReminderDaysBefore {
+    if (_appDocPath == null) return 0;
+    return (_readConfig()['customEventReminderDaysBefore'] as num?)?.toInt() ?? 0;
+  }
+
+  static int get customEventReminderHour {
+    if (_appDocPath == null) return 9;
+    return (_readConfig()['customEventReminderHour'] as num?)?.toInt() ?? 9;
+  }
+
+  static Future<void> setCustomEventReminderTiming({
+    int? daysBefore,
+    int? hour,
+  }) async {
+    final c = _readConfig();
+    if (daysBefore != null) c['customEventReminderDaysBefore'] = daysBefore;
+    if (hour != null) c['customEventReminderHour'] = hour;
+    await _writeConfig(c);
+  }
+
+  // ── App lock ──────────────────────────────────────────────────────────────
+
+  static bool get isAppLockEnabled {
+    if (_appDocPath == null) return false;
+    return _readConfig()['appLockEnabled'] as bool? ?? false;
+  }
+
+  static Future<void> setAppLockEnabled(bool enabled) async {
+    final c = _readConfig();
+    c['appLockEnabled'] = enabled;
+    await _writeConfig(c);
+    appLockEnabledNotifier.value = enabled;
+  }
+
+  /// Resolves a stored photo path to a valid absolute path.
+  ///
+  /// On iOS the app-container UUID can change between installs/restores, making
+  /// stored absolute paths invalid. We try the stored path first; if it doesn't
+  /// exist we reconstruct from the cached docs dir + filename.
+  static String? resolvePhotoPath(String? stored) {
+    if (stored == null) return null;
+    if (File(stored).existsSync()) return stored;
+    // Attempt to fix a stale absolute path by re-joining the filename
+    if (_appDocPath != null) {
+      final filename = p.basename(stored);
+      if (filename.isNotEmpty) {
+        final reconstructed = p.join(_appDocPath!, filename);
+        if (File(reconstructed).existsSync()) return reconstructed;
+      }
+    }
+    return null; // file genuinely missing
+  }
+
   static Future<void> init() async {
     await Hive.initFlutter();
+    _appDocPath = (await getApplicationDocumentsDirectory()).path;
+
+    // Pre-load config and initialise ValueNotifiers so widgets can read them synchronously
+    final cfg = _readConfig();
+    emergencyEnabledNotifier.value = cfg['emergencyEnabled'] as bool? ?? false;
+    appLockEnabledNotifier.value   = cfg['appLockEnabled']   as bool? ?? false;
 
     // Guard against duplicate registration (e.g. hot restart in dev)
     if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(AppContactAdapter());
@@ -123,25 +307,109 @@ class StorageService {
     await settingsBox.put('settings', settings);
   }
 
+  // ── Contact sync map ─────────────────────────────────────────────────────
+
+  /// Get sync map: appContactId → phoneContactId
+  static Map<String, String> getSyncMap() {
+    final raw = _readConfig()['syncMap'];
+    if (raw is Map) return Map<String, String>.from(raw.map((k, v) => MapEntry(k.toString(), v.toString())));
+    return {};
+  }
+
+  /// Add a mapping when importing a contact
+  static Future<void> addToSyncMap(String appContactId, String phoneContactId) async {
+    final cfg = Map<String, dynamic>.from(_readConfig());
+    final map = getSyncMap();
+    map[appContactId] = phoneContactId;
+    cfg['syncMap'] = map;
+    // Also track all imported phone IDs
+    final imported = Set<String>.from((cfg['importedPhoneIds'] as List? ?? []).map((e) => e.toString()));
+    imported.add(phoneContactId);
+    cfg['importedPhoneIds'] = imported.toList();
+    await _writeConfig(cfg);
+  }
+
+  /// Remove from sync map (when contact is deleted)
+  static Future<void> removeFromSyncMap(String appContactId) async {
+    final cfg = Map<String, dynamic>.from(_readConfig());
+    final map = getSyncMap();
+    map.remove(appContactId);
+    cfg['syncMap'] = map;
+    await _writeConfig(cfg);
+  }
+
+  /// Get set of all phone contact IDs that were ever imported
+  static Set<String> getImportedPhoneIds() {
+    final raw = _readConfig()['importedPhoneIds'];
+    if (raw is List) return Set<String>.from(raw.map((e) => e.toString()));
+    return {};
+  }
+
+  // ── One-time permission rationale flag ───────────────────────────────────
+
+  /// Returns true if the contacts-permission rationale screen has already been
+  /// shown to the user (marker file exists in the app documents folder).
+  static bool get hasShownContactsRationale {
+    if (_appDocPath == null) return false;
+    return File(p.join(_appDocPath!, '.contacts_explained')).existsSync();
+  }
+
+  /// Persists the "rationale shown" marker so we never show it again.
+  static Future<void> markContactsRationaleShown() async {
+    if (_appDocPath == null) return;
+    final marker = File(p.join(_appDocPath!, '.contacts_explained'));
+    if (!marker.existsSync()) await marker.create();
+  }
+
   // ── Backup ────────────────────────────────────────────────────────────────
 
-  static Map<String, dynamic> exportToJson() {
-    final contacts = getAllContacts().map((c) => {
-      'id': c.id,
-      'name': c.name,
-      'primaryPhone': c.effectivePrimaryPhone,
-      'phones': c.phones,
-      'phoneLabels': c.phoneLabels,
-      'primaryPhoneIndex': c.primaryPhoneIndex,
-      'emails': c.emails,
-      'emailLabels': c.emailLabels,
-      'categoryIds': c.categoryIds,
-      'sortOrder': c.sortOrder,
-      'notes': c.notes,
-      'nickname': c.nickname,
-      'birthdayMillis': c.birthdayMillis,
-      'lastContactedMillis': c.lastContactedMillis,
-    }).toList();
+  static Future<Map<String, dynamic>> exportToJson() async {
+    final contactList = getAllContacts();
+    final contacts = <Map<String, dynamic>>[];
+
+    for (final c in contactList) {
+      // Encode display photo as base64
+      String? photoBase64;
+      if (c.localPhotoPath != null) {
+        final f = File(c.localPhotoPath!);
+        if (await f.exists()) {
+          photoBase64 = base64Encode(await f.readAsBytes());
+        }
+      }
+
+      // Encode original photo if different from display photo
+      String? originalPhotoBase64;
+      if (c.originalPhotoPath != null &&
+          c.originalPhotoPath != c.localPhotoPath) {
+        final f = File(c.originalPhotoPath!);
+        if (await f.exists()) {
+          originalPhotoBase64 = base64Encode(await f.readAsBytes());
+        }
+      }
+
+      contacts.add({
+        'id': c.id,
+        'name': c.name,
+        'primaryPhone': c.effectivePrimaryPhone,
+        'phones': c.phones,
+        'phoneLabels': c.phoneLabels,
+        'primaryPhoneIndex': c.primaryPhoneIndex,
+        'emails': c.emails,
+        'emailLabels': c.emailLabels,
+        'categoryIds': c.categoryIds,
+        'sortOrder': c.sortOrder,
+        'notes': c.notes,
+        'nickname': c.nickname,
+        'birthdayMillis': c.birthdayMillis,
+        'anniversaryMillis': c.anniversaryMillis,
+        'lastContactedMillis': c.lastContactedMillis,
+        if (c.address != null) 'address': c.address,
+        if (c.customEventsJson != null) 'customEventsJson': c.customEventsJson,
+        if (photoBase64 != null) 'photoBase64': photoBase64,
+        if (originalPhotoBase64 != null)
+          'originalPhotoBase64': originalPhotoBase64,
+      });
+    }
 
     final categories = getAllCategories().map((c) => {
       'id': c.id,
@@ -151,7 +419,7 @@ class StorageService {
     }).toList();
 
     return {
-      'version': 1,
+      'version': 2,
       'exportedAt': DateTime.now().toIso8601String(),
       'contacts': contacts,
       'categories': categories,
@@ -160,6 +428,7 @@ class StorageService {
 
   static Future<void> importFromJson(String jsonStr) async {
     final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+    final appDir = await getApplicationDocumentsDirectory();
 
     final cats = data['categories'] as List<dynamic>? ?? [];
     for (final c in cats) {
@@ -174,6 +443,50 @@ class StorageService {
 
     final contacts = data['contacts'] as List<dynamic>? ?? [];
     for (final c in contacts) {
+      final contactId = c['id'] as String;
+      // Check if contact already exists (to preserve photos from old backups)
+      final existing = contactsBox.get(contactId);
+
+      // Restore display photo from base64
+      String? localPhotoPath;
+      final photoBase64 = c['photoBase64'] as String?;
+      if (photoBase64 != null) {
+        try {
+          final bytes = base64Decode(photoBase64);
+          final file = File(p.join(appDir.path,
+              'contact_import_${const Uuid().v4()}.jpg'));
+          await file.writeAsBytes(bytes);
+          localPhotoPath = file.path;
+        } catch (_) {}
+      }
+
+      // If backup has no photo but contact already exists with a valid photo → keep it
+      if (localPhotoPath == null &&
+          existing?.localPhotoPath != null &&
+          File(existing!.localPhotoPath!).existsSync()) {
+        localPhotoPath = existing.localPhotoPath;
+      }
+
+      // Restore original photo from base64 (if exported separately)
+      String? originalPhotoPath;
+      final origBase64 = c['originalPhotoBase64'] as String?;
+      if (origBase64 != null) {
+        try {
+          final bytes = base64Decode(origBase64);
+          final file = File(p.join(appDir.path,
+              'contact_orig_import_${const Uuid().v4()}.jpg'));
+          await file.writeAsBytes(bytes);
+          originalPhotoPath = file.path;
+        } catch (_) {}
+      } else if (existing?.originalPhotoPath != null &&
+          File(existing!.originalPhotoPath!).existsSync()) {
+        // Preserve existing original photo
+        originalPhotoPath = existing.originalPhotoPath;
+      } else {
+        // No separate original → use display photo as original too
+        originalPhotoPath = localPhotoPath;
+      }
+
       final contact = AppContact(
         id: c['id'] as String,
         name: c['name'] as String,
@@ -188,7 +501,12 @@ class StorageService {
         notes: c['notes'] as String?,
         nickname: c['nickname'] as String?,
         birthdayMillis: (c['birthdayMillis'] as num?)?.toInt(),
+        anniversaryMillis: (c['anniversaryMillis'] as num?)?.toInt(),
         lastContactedMillis: (c['lastContactedMillis'] as num?)?.toInt(),
+        address: c['address'] as String?,
+        customEventsJson: c['customEventsJson'] as String?,
+        localPhotoPath: localPhotoPath,
+        originalPhotoPath: originalPhotoPath,
       );
       await contactsBox.put(contact.id, contact);
     }

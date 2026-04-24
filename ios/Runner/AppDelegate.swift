@@ -136,9 +136,6 @@ import Intents
 
   @available(iOS 16.2, *)
   private func endAllActivities() async {
-    // End all running live activities
-    if #available(iOS 16.2, *) {
-      // Activity.activities would be used here when the Live Activity target is set up
-    }
+    // Activity.activities would be used here when the Live Activity target is set up
   }
 }
