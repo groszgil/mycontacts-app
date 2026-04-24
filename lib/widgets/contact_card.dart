@@ -5,6 +5,7 @@ import '../models/app_contact.dart';
 import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
+import 'whatsapp_icon.dart';
 
 class ContactCard extends StatefulWidget {
   final AppContact contact;
@@ -203,10 +204,10 @@ class _ContactCardState extends State<ContactCard> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.chat_rounded,
-                            color: const Color(0xFF25D366)
-                                .withValues(alpha: 0.5 + swipeProgress * 0.5),
-                            size: 28),
+                        Opacity(
+                          opacity: (0.5 + swipeProgress * 0.5).clamp(0.0, 1.0),
+                          child: const WhatsAppIcon(size: 28),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           'WhatsApp',
@@ -605,6 +606,7 @@ class _ContactPreviewDialog extends StatelessWidget {
                         icon: Icons.chat_rounded,
                         color: const Color(0xFF25D366),
                         label: 'WhatsApp',
+                        iconWidget: const WhatsAppIcon(size: 24),
                         onTap: () {
                           Navigator.pop(context);
                           LaunchHelper.openWhatsApp(primaryPhone);
@@ -748,12 +750,15 @@ class _ActionCircle extends StatelessWidget {
   final Color color;
   final String label;
   final VoidCallback onTap;
+  /// Optional override — when set, rendered instead of [Icon(icon)].
+  final Widget? iconWidget;
 
   const _ActionCircle({
     required this.icon,
     required this.color,
     required this.label,
     required this.onTap,
+    this.iconWidget,
   });
 
   @override
@@ -770,7 +775,9 @@ class _ActionCircle extends StatelessWidget {
               color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Center(
+              child: iconWidget ?? Icon(icon, color: color, size: 24),
+            ),
           ),
           const SizedBox(height: 4),
           Text(

@@ -361,6 +361,41 @@ class StorageService {
     if (!marker.existsSync()) await marker.create();
   }
 
+  // ── First-launch flag ─────────────────────────────────────────────────────
+
+  /// True when the app has never been opened before (no marker file exists).
+  static bool get isFirstLaunch {
+    if (_appDocPath == null) return false;
+    return !File(p.join(_appDocPath!, '.first_launch_done')).existsSync();
+  }
+
+  /// Marks the first launch as complete so the prompt never shows again.
+  static Future<void> markFirstLaunchDone() async {
+    if (_appDocPath == null) return;
+    final marker = File(p.join(_appDocPath!, '.first_launch_done'));
+    if (!marker.existsSync()) await marker.create();
+  }
+
+  // ── Known phone contact IDs (for new-contact sync detection) ─────────────
+
+  /// Returns the set of phone-contact IDs that were present on the device at
+  /// the time of the last sync check. Any ID not in this set is "new".
+  static Set<String> getKnownPhoneContactIds() {
+    final raw = _readConfig()['knownPhoneContactIds'];
+    if (raw is List) {
+      return Set<String>.from(raw.map((e) => e.toString()));
+    }
+    return {};
+  }
+
+  /// Saves the current set of phone-contact IDs so we can detect new ones
+  /// on the next app open.
+  static Future<void> saveKnownPhoneContactIds(Set<String> ids) async {
+    final cfg = Map<String, dynamic>.from(_readConfig());
+    cfg['knownPhoneContactIds'] = ids.toList();
+    await _writeConfig(cfg);
+  }
+
   // ── Backup ────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> exportToJson() async {

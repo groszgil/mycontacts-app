@@ -4,6 +4,7 @@ import '../models/app_contact.dart';
 import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
+import '../widgets/whatsapp_icon.dart';
 
 class ContactDetailScreen extends StatelessWidget {
   final AppContact contact;
@@ -129,6 +130,7 @@ class ContactDetailScreen extends StatelessWidget {
                           icon: Icons.chat_rounded,
                           label: 'WhatsApp',
                           color: const Color(0xFF25D366),
+                          iconWidget: const WhatsAppIcon(size: 22),
                           onTap: () => LaunchHelper.openWhatsApp(
                               contact.effectivePrimaryPhone),
                         ),
@@ -184,6 +186,7 @@ class ContactDetailScreen extends StatelessWidget {
                               _SmallActionBtn(
                                 icon: Icons.chat_rounded,
                                 color: const Color(0xFF25D366),
+                                iconWidget: const WhatsAppIcon(size: 16),
                                 onTap: () => LaunchHelper.openWhatsApp(
                                     contact.phones[i]),
                               ),
@@ -441,12 +444,15 @@ class _QuickAction extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
+  /// Optional override — when set, rendered instead of [Icon(icon)].
+  final Widget? iconWidget;
 
   const _QuickAction({
     required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
+    this.iconWidget,
   });
 
   @override
@@ -463,7 +469,7 @@ class _QuickAction extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: color, size: 22),
+              iconWidget ?? Icon(icon, color: color, size: 22),
               const SizedBox(height: 4),
               Text(
                 label,
@@ -739,11 +745,14 @@ class _SmallActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  /// Optional override — when set, rendered instead of [Icon(icon)].
+  final Widget? iconWidget;
 
   const _SmallActionBtn({
     required this.icon,
     required this.color,
     required this.onTap,
+    this.iconWidget,
   });
 
   @override
@@ -757,7 +766,9 @@ class _SmallActionBtn extends StatelessWidget {
           color: color.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: color, size: 16),
+        child: Center(
+          child: iconWidget ?? Icon(icon, color: color, size: 16),
+        ),
       ),
     );
   }

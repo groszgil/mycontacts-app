@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
+import '../widgets/whatsapp_icon.dart';
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});
@@ -97,8 +98,21 @@ class _DialerScreenState extends State<DialerScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Left placeholder — keeps the number centred
-                    const SizedBox(width: 40),
+                    // RIGHT side (RTL first child) — delete / backspace button
+                    GestureDetector(
+                      onTap: _number.isEmpty ? null : _backspace,
+                      onLongPress: _number.isEmpty ? null : _clear,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          Icons.backspace_outlined,
+                          color: _number.isEmpty
+                              ? AppTheme.textLight.withValues(alpha: 0.25)
+                              : AppTheme.textLight,
+                          size: 24,
+                        ),
+                      ),
+                    ),
 
                     Expanded(
                       child: Text(
@@ -116,26 +130,15 @@ class _DialerScreenState extends State<DialerScreen> {
                       ),
                     ),
 
-                    // Right action: paste when empty, backspace when filled
-                    if (_number.isEmpty)
-                      GestureDetector(
-                        onTap: _pasteFromClipboard,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Icon(Icons.content_paste_rounded,
-                              color: AppTheme.textLight, size: 22),
-                        ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: _backspace,
-                        onLongPress: _clear,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Icon(Icons.backspace_outlined,
-                              color: AppTheme.textLight, size: 24),
-                        ),
+                    // LEFT side (RTL last child) — paste button
+                    GestureDetector(
+                      onTap: _pasteFromClipboard,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(Icons.content_paste_rounded,
+                            color: AppTheme.textLight, size: 22),
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -229,6 +232,7 @@ class _DialerScreenState extends State<DialerScreen> {
                       color: const Color(0xFF25D366),
                       label: 'WhatsApp',
                       enabled: _number.isNotEmpty,
+                      iconWidget: const WhatsAppIcon(size: 24),
                       onTap: () => LaunchHelper.openWhatsApp(_number),
                     ),
                   ],
@@ -383,6 +387,8 @@ class _ActionBtn extends StatelessWidget {
   final String label;
   final bool enabled;
   final VoidCallback onTap;
+  /// Optional override — when set, rendered instead of [Icon(icon)].
+  final Widget? iconWidget;
 
   const _ActionBtn({
     required this.icon,
@@ -390,11 +396,21 @@ class _ActionBtn extends StatelessWidget {
     required this.label,
     required this.enabled,
     required this.onTap,
+    this.iconWidget,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = enabled ? color : AppTheme.textLight.withValues(alpha: 0.5);
+    Widget iconChild = iconWidget != null && enabled
+        ? iconWidget!
+        : (iconWidget != null
+            ? ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                    AppTheme.textLight.withValues(alpha: 0.5), BlendMode.srcIn),
+                child: iconWidget!)
+            : Icon(icon, color: c, size: 24));
+
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Column(
@@ -407,7 +423,7 @@ class _ActionBtn extends StatelessWidget {
               color: c.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: c, size: 24),
+            child: Center(child: iconChild),
           ),
           const SizedBox(height: 4),
           Text(label,

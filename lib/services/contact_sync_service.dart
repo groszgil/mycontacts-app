@@ -35,7 +35,6 @@ class ContactSyncService {
     final phoneMap = {for (final c in phoneContacts) c.id: c};
 
     final syncMap = StorageService.getSyncMap(); // appContactId → phoneContactId
-    final importedPhoneIds = StorageService.getImportedPhoneIds();
     final allAppContacts = StorageService.getAllContacts();
     final appContactMap = {for (final c in allAppContacts) c.id: c};
 
@@ -70,14 +69,29 @@ class ContactSyncService {
       }
     }
 
-    // 2. Find new phone contacts (not yet imported, have phones)
-    final allImportedPhoneIds = importedPhoneIds;
-    final newContacts = phoneContacts
-        .where((c) =>
-            c.phones.isNotEmpty &&
-            !allImportedPhoneIds.contains(c.id) &&
-            (c.displayName ?? '').isNotEmpty)
-        .toList();
+    // 2. Find truly NEW phone contacts — those whose ID was not seen during
+    //    the previous sync run.  On the very first run we snapshot all IDs
+    //    without reporting any "new" ones (otherwise the user would be
+    //    bombarded with every contact they ever had on their phone).
+    final knownIds = StorageService.getKnownPhoneContactIds();
+    final currentIds = Set<String>.from(
+        phoneContacts.map((c) => c.id ?? '').where((id) => id.isNotEmpty));
+
+    List<Contact> newContacts;
+    if (knownIds.isEmpty) {
+      // First sync run — just snapshot, report nothing new.
+      newContacts = [];
+    } else {
+      newContacts = phoneContacts
+          .where((c) =>
+              c.phones.isNotEmpty &&
+              !knownIds.contains(c.id ?? '') &&
+              (c.displayName ?? '').isNotEmpty)
+          .toList();
+    }
+
+    // Always update the snapshot so the next run is accurate.
+    await StorageService.saveKnownPhoneContactIds(currentIds);
 
     return SyncResult(changes: changes, newPhoneContacts: newContacts);
   }
