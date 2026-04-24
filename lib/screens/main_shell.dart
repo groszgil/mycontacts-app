@@ -39,6 +39,21 @@ class _MainShellState extends State<MainShell> {
     if (!StorageService.isFirstLaunch) return;
     await StorageService.markFirstLaunchDone();
     if (!mounted) return;
+
+    // Step 1: Request contacts permission upfront, before showing any dialog.
+    final status =
+        await FlutterContacts.permissions.request(PermissionType.read);
+    final granted = status == PermissionStatus.granted ||
+        status == PermissionStatus.limited;
+
+    // Mark rationale as shown so the import screen won't show it again.
+    if (!StorageService.hasShownContactsRationale) {
+      await StorageService.markContactsRationaleShown();
+    }
+
+    if (!granted || !mounted) return;
+
+    // Step 2: Ask whether the user wants to import favorites.
     await _showFirstLaunchDialog();
   }
 
@@ -51,8 +66,7 @@ class _MainShellState extends State<MainShell> {
         child: AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          contentPadding:
-              const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -77,17 +91,14 @@ class _MainShellState extends State<MainShell> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'האם תרצה לייבא אנשי קשר מועדפים מהטלפון שלך?\n\nכך תוכל להתחיל להשתמש מיד ולחסוך זמן.',
+                'האם תרצה לייבא אנשי קשר מועדפים מהטלפון שלך?\n\nבחר את אנשי הקשר שתרצה להוסיף לרשימה שלך וחסוך זמן.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textLight,
-                    height: 1.55),
+                    fontSize: 14, color: AppTheme.textLight, height: 1.55),
               ),
             ],
           ),
-          actionsPadding:
-              const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           actions: [
             Row(
               children: [
@@ -247,12 +258,13 @@ class _MainShellState extends State<MainShell> {
 
     if (result != true || !mounted) return;
 
-    // Auto-create basic AppContact entries (name + phones) for each new contact.
+    // Auto-create AppContact entries for each new contact.
     int added = 0;
     final existingCount = StorageService.getAllContacts().length;
     for (final c in newContacts) {
       final name = c.displayName ?? '';
       if (name.isEmpty || c.phones.isEmpty) continue;
+
       final phones = c.phones.map((p) => p.number).toList();
       final labels = c.phones.map((p) {
         switch (p.label.label) {
@@ -274,17 +286,16 @@ class _MainShellState extends State<MainShell> {
       final appContact = AppContact(
         id: const Uuid().v4(),
         name: name,
-        primaryPhone: phones.first,
+        primaryPhone: phones.isNotEmpty ? phones.first : '',
         phones: phones,
         phoneLabels: labels,
-        email: null,
         categoryIds: ['all'],
         sortOrder: existingCount + added,
       );
       await StorageService.saveContact(appContact);
-      final phoneId = c.id ?? '';
-      if (phoneId.isNotEmpty) {
-        await StorageService.addToSyncMap(appContact.id, phoneId);
+      final cid = c.id ?? '';
+      if (cid.isNotEmpty) {
+        await StorageService.addToSyncMap(appContact.id, cid);
       }
       added++;
     }

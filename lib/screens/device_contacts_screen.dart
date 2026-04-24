@@ -5,6 +5,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
+import '../widgets/whatsapp_icon.dart';
 
 class DeviceContactsScreen extends StatefulWidget {
   const DeviceContactsScreen({super.key});
@@ -127,7 +128,7 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
             children: [
               // ── Header ─────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
                 child: Row(
                   children: [
                     Text(
@@ -149,6 +150,37 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                    if (!_permissionDenied && !_showingRationale) ...[
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: 'מרענן את רשימת אנשי הקשר מהמכשיר',
+                        child: GestureDetector(
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text(
+                                    'מרענן את רשימת אנשי הקשר מהמכשיר...'),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            );
+                            _loadContacts();
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.refresh_rounded,
+                                color: primary, size: 20),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -713,6 +745,7 @@ class _PhoneRow extends StatelessWidget {
                 icon: Icons.chat_rounded,
                 color: const Color(0xFF25D366),
                 tooltip: 'WhatsApp',
+                iconWidget: const WhatsAppIcon(size: 20),
                 onTap: () {
                   Navigator.pop(context);
                   LaunchHelper.openWhatsApp(phone);
@@ -733,12 +766,14 @@ class _ActionCircle extends StatelessWidget {
   final Color color;
   final String tooltip;
   final VoidCallback onTap;
+  final Widget? iconWidget;
 
   const _ActionCircle(
       {required this.icon,
       required this.color,
       required this.tooltip,
-      required this.onTap});
+      required this.onTap,
+      this.iconWidget});
 
   @override
   Widget build(BuildContext context) {
@@ -756,7 +791,9 @@ class _ActionCircle extends StatelessWidget {
             color: color.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: color, size: 20),
+          child: Center(
+            child: iconWidget ?? Icon(icon, color: color, size: 20),
+          ),
         ),
       ),
     );

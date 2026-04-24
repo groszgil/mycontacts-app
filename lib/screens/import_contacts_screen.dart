@@ -197,30 +197,47 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
   }
 
   Future<void> _selectContact(Contact contact) async {
+    // Fetch full contact details individually — getAll() can miss notes on
+    // some Android versions even when ContactProperty.note is requested.
+    final fullContact = contact.id != null
+        ? await FlutterContacts.get(
+            contact.id!,
+            properties: {
+              ContactProperty.phone,
+              ContactProperty.email,
+              ContactProperty.photoThumbnail,
+              ContactProperty.photoFullRes,
+              ContactProperty.event,
+              ContactProperty.address,
+              ContactProperty.note,
+            },
+          )
+        : null;
+    final c = fullContact ?? contact;
+
     String? photoPath;
     // Prefer full-size photo so the user can crop/adjust after import.
     // Fall back to thumbnail if full-size wasn't returned by the OS.
-    final photoBytes =
-        contact.photo?.fullSize ?? contact.photo?.thumbnail;
+    final photoBytes = c.photo?.fullSize ?? c.photo?.thumbnail;
     if (photoBytes != null && photoBytes.isNotEmpty) {
       photoPath = await _savePhoto(photoBytes);
     }
 
-    final phones = contact.phones.map((ph) => ph.number).toList();
+    final phones = c.phones.map((ph) => ph.number).toList();
     final phoneLabels =
-        contact.phones.map((ph) => _mapPhoneLabel(ph.label.label)).toList();
+        c.phones.map((ph) => _mapPhoneLabel(ph.label.label)).toList();
 
-    final emails = contact.emails.map((e) => e.address).toList();
+    final emails = c.emails.map((e) => e.address).toList();
     final emailLabels =
-        contact.emails.map((e) => _mapEmailLabel(e.label.label)).toList();
+        c.emails.map((e) => _mapEmailLabel(e.label.label)).toList();
 
-    final birthday = _extractBirthday(contact);
-    final anniversary = _extractAnniversary(contact);
-    final address = _extractAddress(contact);
+    final birthday = _extractBirthday(c);
+    final anniversary = _extractAnniversary(c);
+    final address = _extractAddress(c);
 
     // Extract notes from device contact
-    final notes = contact.notes.isNotEmpty
-        ? contact.notes.map((n) => n.note).where((n) => n.isNotEmpty).join('\n')
+    final notes = c.notes.isNotEmpty
+        ? c.notes.map((n) => n.note).where((n) => n.isNotEmpty).join('\n')
         : null;
 
     final result = await Navigator.push<bool>(
@@ -237,7 +254,7 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
           prefillAnniversary: anniversary,
           prefillAddress: address,
           prefillNotes: notes,
-          sourceContactId: contact.id,
+          sourceContactId: c.id,
         ),
       ),
     );

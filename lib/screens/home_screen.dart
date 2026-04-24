@@ -523,10 +523,13 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _PulsingCircle(
-            icon: Icons.contacts_rounded,
-            color: primary,
-            size: 100,
+          GestureDetector(
+            onTap: _navigateToAdd,
+            child: _PulsingCircle(
+              icon: Icons.person_add_rounded,
+              color: primary,
+              size: 100,
+            ),
           ),
           const SizedBox(height: 20),
           Text(
@@ -539,39 +542,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     : AppTheme.textDark),
           ),
           const SizedBox(height: 8),
-          const Text('לחץ על + כדי להוסיף',
+          const Text('לחץ על הסמל או על + כדי להוסיף',
               style: TextStyle(fontSize: 15, color: AppTheme.textLight)),
           const SizedBox(height: 28),
-          GestureDetector(
-            onTap: _navigateToAdd,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-              decoration: BoxDecoration(
-                color: primary,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: primary.withValues(alpha: 0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _navigateToImport,
+                icon: const Icon(Icons.contacts_rounded, size: 18),
+                label: const Text('ייבוא מהטלפון'),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.person_add_rounded,
-                      color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text('הוסף ראשון',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16)),
-                ],
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _navigateToAdd,
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('הוסף ידנית'),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -764,18 +752,43 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _PulsingCircle(
-            icon: Icons.person_search_rounded,
-            color: primary,
-            size: 90,
+          GestureDetector(
+            onTap: _navigateToAdd,
+            child: _PulsingCircle(
+              icon: Icons.person_add_rounded,
+              color: primary,
+              size: 90,
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
-            'אין אנשי קשר בקטגוריה זו',
+            'אין אנשי קשר עדיין',
             style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textLight),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'לחץ על הסמל או על + כדי להוסיף',
+            style: TextStyle(fontSize: 13, color: AppTheme.textLight),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _navigateToImport,
+                icon: const Icon(Icons.contacts_rounded, size: 18),
+                label: const Text('ייבוא מהטלפון'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _navigateToAdd,
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('הוסף ידנית'),
+              ),
+            ],
           ),
         ],
       ),
