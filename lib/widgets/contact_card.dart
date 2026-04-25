@@ -13,6 +13,8 @@ class ContactCard extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback? onTap;
   final bool isListView;
+  /// Most-recent call timestamp from the device call log (Android only).
+  final DateTime? lastCall;
 
   const ContactCard({
     super.key,
@@ -21,6 +23,7 @@ class ContactCard extends StatefulWidget {
     required this.onDelete,
     this.onTap,
     this.isListView = false,
+    this.lastCall,
   });
 
   @override
@@ -37,6 +40,20 @@ class _ContactCardState extends State<ContactCard> {
       return '${parts.first[0]}${parts.last[0]}';
     }
     return widget.contact.name.isNotEmpty ? widget.contact.name[0] : '?';
+  }
+
+  String get _lastCallLabel {
+    final lc = widget.lastCall;
+    if (lc == null) return '';
+    final diff = DateTime.now().difference(lc);
+    if (diff.inMinutes < 1) return 'עכשיו';
+    if (diff.inMinutes < 60) return 'לפני ${diff.inMinutes} דק\'';
+    if (diff.inHours < 24) return 'לפני ${diff.inHours} שע\'';
+    if (diff.inDays == 1) return 'אתמול';
+    if (diff.inDays < 7) return 'לפני ${diff.inDays} ימים';
+    if (diff.inDays < 30) return 'לפני ${(diff.inDays / 7).round()} שבועות';
+    if (diff.inDays < 365) return 'לפני ${(diff.inDays / 30).round()} חודשים';
+    return 'לפני יותר משנה';
   }
 
   Color _avatarColor() {
@@ -308,6 +325,15 @@ class _ContactCardState extends State<ContactCard> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                  ] else if (widget.lastCall != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '📞 $_lastCallLabel',
+                      style: const TextStyle(
+                          fontSize: 9, color: AppTheme.textLight),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ],
               ),
@@ -370,6 +396,14 @@ class _ContactCardState extends State<ContactCard> {
                       fontSize: 11,
                       color: AppTheme.primaryOf(context)
                           .withValues(alpha: 0.7),
+                    ),
+                  ),
+                if (widget.lastCall != null)
+                  Text(
+                    '📞 ${_lastCallLabel}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textLight,
                     ),
                   ),
               ],

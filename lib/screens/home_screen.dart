@@ -8,6 +8,7 @@ import '../models/app_contact.dart';
 import '../models/category.dart';
 import '../models/app_settings.dart';
 import '../services/storage_service.dart';
+import '../services/call_log_service.dart';
 import '../utils/theme.dart';
 import '../widgets/contact_card.dart';
 import 'add_edit_contact_screen.dart';
@@ -33,14 +34,22 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isReordering = false;
   bool _headerCollapsed = false;
   bool _isListView = false;
+  /// Call-log cache: normalised phone → last-call timestamp (Android only).
+  Map<String, DateTime> _callMap = {};
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _loadData();
+    _loadCallLog();
     StorageService.categoriesBox.listenable().addListener(_loadData);
     StorageService.settingsBox.listenable().addListener(_loadData);
+  }
+
+  Future<void> _loadCallLog() async {
+    final map = await CallLogService.fetchLastCallPerNumber();
+    if (mounted) setState(() => _callMap = map);
   }
 
   @override
@@ -486,6 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onEdit: () => _navigateToEdit(c),
             onDelete: () => _deleteContact(c),
             onTap: () => _navigateToDetail(c),
+            lastCall: CallLogService.lastCallFor(c.phones, _callMap),
           );
         },
       );
@@ -510,6 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onEdit: () => _navigateToEdit(c),
           onDelete: () => _deleteContact(c),
           onTap: () => _navigateToDetail(c),
+          lastCall: CallLogService.lastCallFor(c.phones, _callMap),
         );
       },
     );

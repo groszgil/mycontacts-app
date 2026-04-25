@@ -548,6 +548,23 @@ class _ContactTile extends StatelessWidget {
                     color: Color(0xFF4CAF50), size: 20),
               ),
             ),
+            const SizedBox(width: 8),
+            // WhatsApp button
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                LaunchHelper.openWhatsApp(phone);
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const WhatsAppIcon(size: 20),
+              ),
+            ),
           ],
         ),
       ),

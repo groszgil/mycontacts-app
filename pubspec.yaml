@@ -42,6 +42,9 @@ dependencies:
   # Home screen widget
   home_widget: '>=0.5.0 <0.9.0'
 
+  # Call log (Android only — iOS restricts access)
+  call_log: ^6.0.1
+
   # Notifications
   flutter_local_notifications: ^18.0.0
   timezone: ^0.9.4

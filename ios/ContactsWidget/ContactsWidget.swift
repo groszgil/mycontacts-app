@@ -56,19 +56,20 @@ struct ContactItemView: View {
     let contact: WidgetContact
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             ZStack {
                 Circle()
-                    .fill(colorForName(contact.name))
+                    .fill(Color.white)
                     .frame(width: 46, height: 46)
+                    .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
                 Text(contact.initials)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(hex: 0x6C63FF))
                     .environment(\.layoutDirection, .rightToLeft)
             }
             Text(firstName(contact.name))
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .frame(maxWidth: 56)
         }
@@ -77,58 +78,66 @@ struct ContactItemView: View {
     func firstName(_ name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
     }
-
-    func colorForName(_ name: String) -> Color {
-        let palette: [Color] = [
-            Color(hex: 0x6C63FF),
-            Color(hex: 0xFF6584),
-            Color(hex: 0x43C6AC),
-            Color(hex: 0xFFB347),
-            Color(hex: 0x56CCF2),
-            Color(hex: 0xBB6BD9),
-            Color(hex: 0x27AE60),
-            Color(hex: 0xEB5757),
-            Color(hex: 0x2F80ED),
-            Color(hex: 0xF2994A),
-        ]
-        let idx = Int(name.unicodeScalars.first?.value ?? 0) % palette.count
-        return palette[idx]
-    }
 }
 
 struct ContactsWidgetView: View {
     var entry: ContactsEntry
     @Environment(\.widgetFamily) var family
 
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-    ]
+    var gridColumns: [GridItem] {
+        if family == .systemSmall {
+            return [GridItem(.flexible()), GridItem(.flexible())]
+        }
+        return [
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+        ]
+    }
 
     var body: some View {
-        if entry.contacts.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "person.2.circle")
-                    .font(.system(size: 36))
-                    .foregroundColor(Color(hex: 0x6C63FF))
-                Text("פתח כדי להוסיף אנשי קשר")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .widgetURL(URL(string: "mycontacts://open"))
-        } else {
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(entry.contacts) { contact in
-                    Link(destination: URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!) {
-                        ContactItemView(contact: contact)
+        ZStack {
+            // Purple gradient background
+            LinearGradient(
+                colors: [Color(hex: 0x6C63FF), Color(hex: 0x4834D4)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            if entry.contacts.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "person.2.circle")
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("פתח כדי להוסיף אנשי קשר")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                }
+                .widgetURL(URL(string: "mycontacts://open"))
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    // App title row
+                    HStack(spacing: 4) {
+                        Text("★ My Contacts")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 4)
+
+                    LazyVGrid(columns: gridColumns, spacing: 10) {
+                        ForEach(entry.contacts) { contact in
+                            Link(destination: URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!) {
+                                ContactItemView(contact: contact)
+                            }
+                        }
                     }
                 }
+                .padding(10)
+                .environment(\.layoutDirection, .rightToLeft)
             }
-            .padding(10)
-            .environment(\.layoutDirection, .rightToLeft)
         }
     }
 }
@@ -228,7 +237,7 @@ struct ContactsWidgetEntryView: View {
             ContactsAccessoryInlineView(entry: entry)
         default:
             ContactsWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) {}
         }
     }
 }
