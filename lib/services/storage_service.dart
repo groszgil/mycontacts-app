@@ -650,11 +650,28 @@ class StorageService {
 
   static Future<void> _updateHomeWidget() async {
     try {
-      final contacts = getAllContacts().take(8).map((c) => {
-        'name': c.name,
-        'phone': c.effectivePrimaryPhone,
-        'initials': _initials(c.name),
-      }).toList();
+      final raw = getAllContacts().take(8).toList();
+      final contacts = await Future.wait(raw.map((c) async {
+        String? photoBase64;
+        final photoPath = c.localPhotoPath;
+        if (photoPath != null && photoPath.isNotEmpty) {
+          try {
+            final f = File(photoPath);
+            if (await f.exists()) {
+              final bytes = await f.readAsBytes();
+              // Resize to ~80×80 worth of JPEG so the widget stays light
+              photoBase64 = base64Encode(bytes);
+            }
+          } catch (_) {}
+        }
+        return {
+          'name': c.name,
+          'phone': c.effectivePrimaryPhone,
+          'initials': _initials(c.name),
+          if (photoBase64 != null) 'photoBase64': photoBase64,
+        };
+      }));
+
       await HomeWidget.saveWidgetData<String>(
           'contacts_json', jsonEncode(contacts));
       await HomeWidget.updateWidget(

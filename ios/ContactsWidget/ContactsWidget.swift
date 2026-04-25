@@ -9,6 +9,7 @@ struct WidgetContact: Codable, Identifiable {
     let name: String
     let phone: String
     let initials: String
+    let photoBase64: String?
 }
 
 // ── Timeline provider ─────────────────────────────────────────────────────
@@ -21,10 +22,10 @@ struct ContactsEntry: TimelineEntry {
 struct ContactsProvider: TimelineProvider {
     func placeholder(in context: Context) -> ContactsEntry {
         ContactsEntry(date: Date(), contacts: [
-            WidgetContact(name: "ישראל ישראלי", phone: "050-0000001", initials: "יי"),
-            WidgetContact(name: "שרה כהן",       phone: "052-0000002", initials: "שכ"),
-            WidgetContact(name: "דוד לוי",        phone: "054-0000003", initials: "דל"),
-            WidgetContact(name: "מיכל ברק",       phone: "053-0000004", initials: "מב"),
+            WidgetContact(name: "ישראל ישראלי", phone: "0500000001", initials: "יי", photoBase64: nil),
+            WidgetContact(name: "שרה כהן",       phone: "0520000002", initials: "שכ", photoBase64: nil),
+            WidgetContact(name: "דוד לוי",        phone: "0540000003", initials: "דל", photoBase64: nil),
+            WidgetContact(name: "מיכל ברק",       phone: "0530000004", initials: "מב", photoBase64: nil),
         ])
     }
 
@@ -50,101 +51,174 @@ struct ContactsProvider: TimelineProvider {
     }
 }
 
-// ── Views ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/// Strips all non-digit characters so tel: URLs work reliably.
+private func dialURL(_ phone: String) -> URL {
+    let digits = phone.filter { $0.isNumber || $0 == "+" }
+    return URL(string: "tel:\(digits)") ?? URL(string: "tel:")!
+}
+
+private func firstName(_ name: String) -> String {
+    name.split(separator: " ").first.map(String.init) ?? name
+}
+
+// ── Contact avatar (photo or initials) ────────────────────────────────────
+
+struct ContactAvatar: View {
+    let contact: WidgetContact
+    let size: CGFloat
+    let fontSize: CGFloat
+
+    private var uiImage: UIImage? {
+        guard let b64 = contact.photoBase64,
+              let data = Data(base64Encoded: b64) else { return nil }
+        return UIImage(data: data)
+    }
+
+    var body: some View {
+        ZStack {
+            if let img = uiImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5))
+            } else {
+                Circle()
+                    .fill(Color.white.opacity(0.18))
+                    .frame(width: size, height: size)
+                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1.5))
+                Text(contact.initials)
+                    .font(.system(size: fontSize, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
+// ── Single contact cell ───────────────────────────────────────────────────
 
 struct ContactItemView: View {
     let contact: WidgetContact
+    let avatarSize: CGFloat
+    let fontSize: CGFloat
 
     var body: some View {
-        VStack(spacing: 4) {
-            ZStack {
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 46, height: 46)
-                    .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
-                Text(contact.initials)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(hex: 0x6C63FF))
-                    .environment(\.layoutDirection, .rightToLeft)
+        Link(destination: dialURL(contact.phone)) {
+            VStack(spacing: 5) {
+                ContactAvatar(contact: contact, size: avatarSize, fontSize: avatarSize * 0.33)
+                Text(firstName(contact.name))
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: avatarSize + 8)
             }
-            Text(firstName(contact.name))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .frame(maxWidth: 56)
         }
-    }
-
-    func firstName(_ name: String) -> String {
-        name.split(separator: " ").first.map(String.init) ?? name
+        .buttonStyle(.plain)
     }
 }
+
+// ── Main widget body ──────────────────────────────────────────────────────
 
 struct ContactsWidgetView: View {
     var entry: ContactsEntry
     @Environment(\.widgetFamily) var family
 
-    var gridColumns: [GridItem] {
-        if family == .systemSmall {
-            return [GridItem(.flexible()), GridItem(.flexible())]
+    private var maxContacts: Int {
+        switch family {
+        case .systemSmall:  return 4
+        case .systemMedium: return 4
+        default:            return 8
         }
-        return [
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-        ]
+    }
+
+    private var columns: Int {
+        switch family {
+        case .systemSmall:  return 2
+        default:            return 4
+        }
+    }
+
+    private var avatarSize: CGFloat {
+        switch family {
+        case .systemSmall:  return 52
+        default:            return 48
+        }
+    }
+
+    private var nameFontSize: CGFloat {
+        family == .systemSmall ? 10 : 10
     }
 
     var body: some View {
         ZStack {
-            // Purple gradient background
+            // App-branded gradient background
             LinearGradient(
                 colors: [Color(hex: 0x6C63FF), Color(hex: 0x4834D4)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+            .ignoresSafeArea()
 
             if entry.contacts.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "person.2.circle")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("פתח כדי להוסיף אנשי קשר")
-                        .font(.caption)
+                    Image(systemName: "person.2.circle.fill")
+                        .font(.system(size: 40, weight: .semibold))
                         .foregroundColor(.white.opacity(0.85))
+                    Text("פתח כדי להוסיף אנשי קשר")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.75))
                         .multilineTextAlignment(.center)
                 }
                 .widgetURL(URL(string: "mycontacts://open"))
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    // App title row
-                    HStack(spacing: 4) {
-                        Text("★ My Contacts")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
+                VStack(alignment: .trailing, spacing: 6) {
+                    // Header
+                    HStack {
                         Spacer()
+                        Text("★ My Contacts")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .environment(\.layoutDirection, .leftToRight)
                     }
-                    .padding(.horizontal, 4)
 
-                    LazyVGrid(columns: gridColumns, spacing: 10) {
-                        ForEach(entry.contacts) { contact in
-                            Link(destination: URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!) {
-                                ContactItemView(contact: contact)
+                    // Contact grid — RTL order so first contact is top-right
+                    let shown = Array(entry.contacts.prefix(maxContacts))
+                    let cols = columns
+                    let rows = (shown.count + cols - 1) / cols
+
+                    VStack(spacing: 10) {
+                        ForEach(0..<rows, id: \.self) { row in
+                            HStack(spacing: family == .systemSmall ? 8 : 10) {
+                                ForEach(0..<cols, id: \.self) { col in
+                                    let idx = row * cols + col
+                                    if idx < shown.count {
+                                        ContactItemView(
+                                            contact: shown[idx],
+                                            avatarSize: avatarSize,
+                                            fontSize: nameFontSize
+                                        )
+                                        .frame(maxWidth: .infinity)
+                                    } else {
+                                        Spacer().frame(maxWidth: .infinity)
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                .padding(10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
                 .environment(\.layoutDirection, .rightToLeft)
             }
         }
     }
 }
 
-// ── Widget entry point ────────────────────────────────────────────────────
-
-// ── Lock Screen accessory views ────────────────────────────────────────────
+// ── Lock-screen accessory views (unchanged) ───────────────────────────────
 
 struct ContactsAccessoryCircularView: View {
     var entry: ContactsEntry
@@ -179,7 +253,7 @@ struct ContactsAccessoryRectangularView: View {
                     .foregroundColor(.primary)
             }
             ForEach(entry.contacts.prefix(3)) { contact in
-                Link(destination: URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!) {
+                Link(destination: dialURL(contact.phone)) {
                     Text("• \(contact.name)")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -199,6 +273,27 @@ struct ContactsAccessoryInlineView: View {
             Label(first.name, systemImage: "phone.fill")
         } else {
             Label("אנשי קשר", systemImage: "person.2")
+        }
+    }
+}
+
+// ── Widget entry point ─────────────────────────────────────────────────────
+
+struct ContactsWidgetEntryView: View {
+    var entry: ContactsEntry
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        switch family {
+        case .accessoryCircular:
+            ContactsAccessoryCircularView(entry: entry)
+        case .accessoryRectangular:
+            ContactsAccessoryRectangularView(entry: entry)
+        case .accessoryInline:
+            ContactsAccessoryInlineView(entry: entry)
+        default:
+            ContactsWidgetView(entry: entry)
+                .containerBackground(for: .widget) {}
         }
     }
 }
@@ -223,25 +318,6 @@ struct ContactsWidget: Widget {
     }
 }
 
-struct ContactsWidgetEntryView: View {
-    var entry: ContactsEntry
-    @Environment(\.widgetFamily) var family
-
-    var body: some View {
-        switch family {
-        case .accessoryCircular:
-            ContactsAccessoryCircularView(entry: entry)
-        case .accessoryRectangular:
-            ContactsAccessoryRectangularView(entry: entry)
-        case .accessoryInline:
-            ContactsAccessoryInlineView(entry: entry)
-        default:
-            ContactsWidgetView(entry: entry)
-                .containerBackground(for: .widget) {}
-        }
-    }
-}
-
 // ── Color extension ───────────────────────────────────────────────────────
 
 extension Color {
@@ -254,7 +330,7 @@ extension Color {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MARK: - Emergency Widget
+// MARK: - Emergency Widget (unchanged)
 // ════════════════════════════════════════════════════════════════════════════
 
 struct EmergencyContact: Codable {
@@ -298,15 +374,13 @@ struct EmergencyProvider: TimelineProvider {
     }
 }
 
-// ── Emergency views ───────────────────────────────────────────────────────
-
 struct EmergencyWidgetView: View {
     var entry: EmergencyEntry
     @Environment(\.widgetFamily) var family
 
     var body: some View {
         if let contact = entry.contact {
-            let callURL = URL(string: "mycontacts://call/\(contact.phone.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? contact.phone)")!
+            let callURL = dialURL(contact.phone)
             Link(destination: callURL) {
                 emergencyBody(contact: contact)
             }
@@ -352,14 +426,12 @@ struct EmergencyWidgetView: View {
             .environment(\.layoutDirection, .rightToLeft)
         default:
             ZStack {
-                // Red gradient background
                 LinearGradient(
                     colors: [Color(hex: 0xE53935), Color(hex: 0xB71C1C)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 VStack(spacing: 10) {
-                    // SOS icon
                     ZStack {
                         Circle()
                             .fill(Color.white.opacity(0.2))
@@ -368,13 +440,11 @@ struct EmergencyWidgetView: View {
                             .font(.system(size: 30, weight: .black))
                             .foregroundColor(.white)
                     }
-                    // Contact name
                     Text(contact.name)
                         .font(.system(size: family == .systemSmall ? 13 : 16,
                                       weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    // "גע לחיוג"
                     Text("גע לחיוג חירום")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
@@ -396,10 +466,6 @@ struct EmergencyWidgetView: View {
                 .multilineTextAlignment(.center)
         }
         .widgetURL(URL(string: "mycontacts://open"))
-    }
-
-    func firstName(_ name: String) -> String {
-        name.split(separator: " ").first.map(String.init) ?? name
     }
 }
 
