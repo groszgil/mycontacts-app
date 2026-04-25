@@ -87,7 +87,9 @@
       "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\('OK'\\)\")",
       "Bash(python3 create_screenshots.py)",
       "Bash(open /Users/gilgrosz/Desktop/PlayStore/screenshots/)",
-      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); pkg=[p for p in data.get\\('packages',[]\\) if p['name']=='flutter_contacts']; print\\(pkg[0] if pkg else 'not found'\\)\")"
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); pkg=[p for p in data.get\\('packages',[]\\) if p['name']=='flutter_contacts']; print\\(pkg[0] if pkg else 'not found'\\)\")",
+      "Bash(ruby -e \"puts RUBY_VERSION\")",
+      "Bash(ruby -e \"puts Encoding.default_external\")"
     ]
   }
 }

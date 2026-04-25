@@ -45,6 +45,9 @@ dependencies:
   # Call log (Android only — iOS restricts access)
   call_log: ^6.0.1
 
+  # WhatsApp & other brand icons
+  font_awesome_flutter: ^10.8.0
+
   # Notifications
   flutter_local_notifications: ^18.0.0
   timezone: ^0.9.4
