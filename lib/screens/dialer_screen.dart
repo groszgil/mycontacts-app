@@ -1,8 +1,74 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/app_contact.dart';
+import '../services/storage_service.dart';
 import '../utils/theme.dart';
 import '../utils/launch_helper.dart';
 import '../widgets/whatsapp_icon.dart';
+
+// ── T9 mapping (Hebrew standard + English) ────────────────────────────────────
+
+const Map<String, String> _kHebT9 = {
+  '2': 'אבג',
+  '3': 'דהו',
+  '4': 'זחט',
+  '5': 'יכך',       // kaf + final kaf
+  '6': 'מםנןס',     // mem + final mem + nun + final nun + samekh
+  '7': 'עפףצץ',     // ayin + pe + final pe + tsadi + final tsadi
+  '8': 'קרש',
+  '9': 'ת',
+};
+
+const Map<String, String> _kEngT9 = {
+  '2': 'abc', '3': 'def', '4': 'ghi', '5': 'jkl',
+  '6': 'mno', '7': 'pqrs', '8': 'tuv', '9': 'wxyz',
+};
+
+// Hebrew letters shown under each key
+const Map<String, String> _kKeyLetters = {
+  '1': '',
+  '2': 'אבג',
+  '3': 'דהו',
+  '4': 'זחט',
+  '5': 'יכל',
+  '6': 'מנס',
+  '7': 'עפצ',
+  '8': 'קרש',
+  '9': 'ת',
+  '0': '+',
+  '*': '',
+  '#': '',
+};
+
+String _charToDigit(String ch) {
+  for (final e in _kHebT9.entries) {
+    if (e.value.contains(ch)) return e.key;
+  }
+  final lower = ch.toLowerCase();
+  for (final e in _kEngT9.entries) {
+    if (e.value.contains(lower)) return e.key;
+  }
+  return '';
+}
+
+String _nameToT9(String name) {
+  final buf = StringBuffer();
+  for (int i = 0; i < name.length; i++) {
+    final d = _charToDigit(name[i]);
+    if (d.isNotEmpty) buf.write(d);
+  }
+  return buf.toString();
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+class _KeyData {
+  final String digit;
+  const _KeyData(this.digit);
+  String get letters => _kKeyLetters[digit] ?? '';
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});
@@ -14,6 +80,8 @@ class DialerScreen extends StatefulWidget {
 class _DialerScreenState extends State<DialerScreen> {
   String _number = '';
 
+  // ── Actions ─────────────────────────────────────────────────────────────────
+
   void _press(String digit) {
     HapticFeedback.lightImpact();
     if (_number.length >= 20) return;
@@ -23,15 +91,12 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text == null) return;
-    // Keep only digits, +, *, #
     final pasted = data!.text!.replaceAll(RegExp(r'[^\d+*#]'), '');
     if (pasted.isEmpty) return;
     HapticFeedback.mediumImpact();
     setState(() {
-      _number = (_number + pasted).substring(
-        0,
-        (_number + pasted).length.clamp(0, 20),
-      );
+      _number = (_number + pasted)
+          .substring(0, (_number + pasted).length.clamp(0, 20));
     });
   }
 
@@ -46,33 +111,51 @@ class _DialerScreenState extends State<DialerScreen> {
     setState(() => _number = '');
   }
 
+  // ── Formatted display ────────────────────────────────────────────────────────
+
   String get _formatted {
-    // Pretty-format Israeli mobile: 05X-XXXXXXX
     final d = _number.replaceAll(RegExp(r'\D'), '');
     if (d.startsWith('0') && d.length >= 3) {
       if (d.length <= 3) return d;
       if (d.length <= 7) return '${d.substring(0, 3)}-${d.substring(3)}';
       return '${d.substring(0, 3)}-${d.substring(3, 7)}-${d.substring(7)}';
     }
-    if (_number.startsWith('+') && d.length > 3) {
-      return _number; // International — keep as-is
-    }
     return _number;
   }
+
+  // ── T9 contact search ────────────────────────────────────────────────────────
+
+  List<AppContact> get _t9Matches {
+    if (_number.length < 2) return [];
+    final all = StorageService.getAllContacts();
+    return all.where((c) {
+      final digits = _nameToT9(c.name);
+      // Also match directly on phone number fragment
+      final phone = c.effectivePrimaryPhone.replaceAll(RegExp(r'\D'), '');
+      return digits.contains(_number) || phone.contains(_number);
+    }).take(5).toList();
+  }
+
+  String _firstPhone(AppContact c) =>
+      c.phones.isNotEmpty ? c.phones.first : c.effectivePrimaryPhone;
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = AppTheme.primaryOf(context);
+    final matches = _t9Matches;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : AppTheme.surface,
+        backgroundColor:
+            isDark ? const Color(0xFF1A1A2E) : AppTheme.surface,
         body: SafeArea(
           child: Column(
             children: [
-              // ── Header ───────────────────────────────────────────────────
+              // ── Header ─────────────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Row(
@@ -92,13 +175,13 @@ class _DialerScreenState extends State<DialerScreen> {
 
               const Spacer(),
 
-              // ── Number display ────────────────────────────────────────────
+              // ── Number display ──────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // RIGHT side (RTL first child) — delete / backspace button
+                    // backspace
                     GestureDetector(
                       onTap: _number.isEmpty ? null : _backspace,
                       onLongPress: _number.isEmpty ? null : _clear,
@@ -113,7 +196,6 @@ class _DialerScreenState extends State<DialerScreen> {
                         ),
                       ),
                     ),
-
                     Expanded(
                       child: Text(
                         _number.isEmpty ? 'הזן מספר' : _formatted,
@@ -129,8 +211,7 @@ class _DialerScreenState extends State<DialerScreen> {
                         ),
                       ),
                     ),
-
-                    // LEFT side (RTL last child) — paste button
+                    // paste
                     GestureDetector(
                       onTap: _pasteFromClipboard,
                       child: Padding(
@@ -143,49 +224,95 @@ class _DialerScreenState extends State<DialerScreen> {
                 ),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Divider(
-                  indent: 40,
-                  endIndent: 40,
-                  color: (isDark ? Colors.white : AppTheme.textDark)
-                      .withValues(alpha: 0.1)),
-              const SizedBox(height: 16),
+                indent: 40,
+                endIndent: 40,
+                color: (isDark ? Colors.white : AppTheme.textDark)
+                    .withValues(alpha: 0.1),
+              ),
 
-              // ── Keypad ────────────────────────────────────────────────────
+              // ── T9 contact suggestions ──────────────────────────────────────
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: matches.isEmpty
+                    ? const SizedBox(height: 8)
+                    : SizedBox(
+                        height: 72,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          itemCount: matches.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 10),
+                          itemBuilder: (_, i) {
+                            final c = matches[i];
+                            return _T9ContactChip(
+                              contact: c,
+                              primary: primary,
+                              isDark: isDark,
+                              onCall: () {
+                                HapticFeedback.mediumImpact();
+                                LaunchHelper.makeCall(_firstPhone(c));
+                              },
+                            );
+                          },
+                        ),
+                      ),
+              ),
+
+              // ── Keypad (always LTR so 1 is on the left) ────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  children: [
-                    _KeyRow(keys: const [
-                      _KeyData('1', ''),
-                      _KeyData('2', 'ABC'),
-                      _KeyData('3', 'DEF'),
-                    ], onPress: _press, isDark: isDark, primary: primary),
-                    const SizedBox(height: 8),
-                    _KeyRow(keys: const [
-                      _KeyData('4', 'GHI'),
-                      _KeyData('5', 'JKL'),
-                      _KeyData('6', 'MNO'),
-                    ], onPress: _press, isDark: isDark, primary: primary),
-                    const SizedBox(height: 8),
-                    _KeyRow(keys: const [
-                      _KeyData('7', 'PQRS'),
-                      _KeyData('8', 'TUV'),
-                      _KeyData('9', 'WXYZ'),
-                    ], onPress: _press, isDark: isDark, primary: primary),
-                    const SizedBox(height: 8),
-                    _KeyRow(keys: const [
-                      _KeyData('*', ''),
-                      _KeyData('0', '+'),
-                      _KeyData('#', ''),
-                    ], onPress: _press, isDark: isDark, primary: primary),
-                  ],
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Column(
+                    children: [
+                      _KeyRow(
+                        keys: const [
+                          _KeyData('1'), _KeyData('2'), _KeyData('3')
+                        ],
+                        onPress: _press,
+                        isDark: isDark,
+                        primary: primary,
+                      ),
+                      const SizedBox(height: 10),
+                      _KeyRow(
+                        keys: const [
+                          _KeyData('4'), _KeyData('5'), _KeyData('6')
+                        ],
+                        onPress: _press,
+                        isDark: isDark,
+                        primary: primary,
+                      ),
+                      const SizedBox(height: 10),
+                      _KeyRow(
+                        keys: const [
+                          _KeyData('7'), _KeyData('8'), _KeyData('9')
+                        ],
+                        onPress: _press,
+                        isDark: isDark,
+                        primary: primary,
+                      ),
+                      const SizedBox(height: 10),
+                      _KeyRow(
+                        keys: const [
+                          _KeyData('*'), _KeyData('0'), _KeyData('#')
+                        ],
+                        onPress: _press,
+                        isDark: isDark,
+                        primary: primary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // ── Action buttons ────────────────────────────────────────────
+              // ── Action buttons ──────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Row(
@@ -239,7 +366,7 @@ class _DialerScreenState extends State<DialerScreen> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
             ],
           ),
         ),
@@ -248,15 +375,93 @@ class _DialerScreenState extends State<DialerScreen> {
   }
 }
 
-// ── Key data ───────────────────────────────────────────────────────────────
+// ── T9 suggestion chip ─────────────────────────────────────────────────────────
 
-class _KeyData {
-  final String digit;
-  final String letters;
-  const _KeyData(this.digit, this.letters);
+class _T9ContactChip extends StatelessWidget {
+  final AppContact contact;
+  final Color primary;
+  final bool isDark;
+  final VoidCallback onCall;
+
+  const _T9ContactChip({
+    required this.contact,
+    required this.primary,
+    required this.isDark,
+    required this.onCall,
+  });
+
+  String get _initials {
+    final parts = contact.name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}';
+    }
+    return contact.name.isNotEmpty ? contact.name[0] : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onCall,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: primary.withValues(alpha: isDark ? 0.18 : 0.1),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+              color: primary.withValues(alpha: 0.3), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // avatar circle
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: primary.withValues(alpha: 0.2),
+              child: Text(
+                _initials,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  contact.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Row(
+                  children: [
+                    Icon(Icons.call_rounded,
+                        size: 11, color: const Color(0xFF4CAF50)),
+                    const SizedBox(width: 3),
+                    Text(
+                      contact.effectivePrimaryPhone,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppTheme.textLight),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-// ── Key row ────────────────────────────────────────────────────────────────
+// ── Key row ────────────────────────────────────────────────────────────────────
 
 class _KeyRow extends StatelessWidget {
   final List<_KeyData> keys;
@@ -276,8 +481,7 @@ class _KeyRow extends StatelessWidget {
     return Row(
       children: keys
           .map((k) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Center(
                   child: _DialKey(
                     data: k,
                     onPress: onPress,
@@ -291,7 +495,7 @@ class _KeyRow extends StatelessWidget {
   }
 }
 
-// ── Single dial key ────────────────────────────────────────────────────────
+// ── Single dial key — iPhone-style circle ─────────────────────────────────────
 
 class _DialKey extends StatefulWidget {
   final _KeyData data;
@@ -313,15 +517,18 @@ class _DialKey extends StatefulWidget {
 class _DialKeyState extends State<_DialKey> {
   bool _pressed = false;
 
+  // Light mode: iOS-style light gray; Dark mode: dark card
+  Color get _bgIdle => widget.isDark
+      ? const Color(0xFF2C2C3E)
+      : const Color(0xFFF2F2F7);
+
+  Color get _bgPressed => widget.isDark
+      ? const Color(0xFF3D3D55)
+      : const Color(0xFFDEDEE8);
+
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isDark
-        ? (_pressed
-            ? const Color(0xFF3A3A5C)
-            : const Color(0xFF252540))
-        : (_pressed
-            ? const Color(0xFFE8E4FF)
-            : Colors.white);
+    final bg = _pressed ? _bgPressed : _bgIdle;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -337,16 +544,18 @@ class _DialKeyState extends State<_DialKey> {
             }
           : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 80),
-        height: 64,
+        duration: const Duration(milliseconds: 70),
+        width: 74,
+        height: 74,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(16),
+          shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: widget.isDark ? 0.12 : 0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black
+                  .withValues(alpha: widget.isDark ? 0.25 : 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -356,20 +565,25 @@ class _DialKeyState extends State<_DialKey> {
             Text(
               widget.data.digit,
               style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w400,
-                color: widget.isDark ? Colors.white : AppTheme.textDark,
+                fontSize: 30,
+                fontWeight: FontWeight.w300,
+                color: widget.isDark ? Colors.white : const Color(0xFF1C1C1E),
                 height: 1.0,
               ),
             ),
             if (widget.data.letters.isNotEmpty)
-              Text(
-                widget.data.letters,
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textLight,
-                  letterSpacing: 1.5,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  widget.data.letters,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                    color: widget.isDark
+                        ? Colors.white.withValues(alpha: 0.55)
+                        : const Color(0xFF8E8E93),
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ),
           ],
@@ -379,7 +593,7 @@ class _DialKeyState extends State<_DialKey> {
   }
 }
 
-// ── Action button ──────────────────────────────────────────────────────────
+// ── Action button ──────────────────────────────────────────────────────────────
 
 class _ActionBtn extends StatelessWidget {
   final IconData icon;
@@ -387,7 +601,6 @@ class _ActionBtn extends StatelessWidget {
   final String label;
   final bool enabled;
   final VoidCallback onTap;
-  /// Optional override — when set, rendered instead of [Icon(icon)].
   final Widget? iconWidget;
 
   const _ActionBtn({

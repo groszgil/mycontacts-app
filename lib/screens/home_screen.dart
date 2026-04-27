@@ -34,6 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isReordering = false;
   bool _headerCollapsed = false;
   bool _isListView = false;
+  /// 0=manual, 1=א-ת (A-Z), 2=ת-א (Z-A), 3=לאחרונה נוסף
+  int _sortOrder = 0;
   /// Call-log cache: normalised phone → last-call timestamp (Android only).
   Map<String, DateTime> _callMap = {};
 
@@ -229,6 +231,17 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () => setState(() => _isReordering = !_isReordering),
           ),
           const SizedBox(width: 8),
+          // Sort button
+          _IconBtn(
+            icon: _sortOrder == 0
+                ? Icons.sort_rounded
+                : Icons.sort_rounded,
+            isDark: isDark,
+            active: _sortOrder != 0,
+            primaryColor: primary,
+            onTap: () => _showSortSheet(),
+          ),
+          const SizedBox(width: 8),
           // Overflow menu
           _IconBtn(
             icon: Icons.more_vert_rounded,
@@ -299,6 +312,136 @@ class _HomeScreenState extends State<HomeScreen> {
           isDestructiveAction: true,
           onPressed: () => Navigator.pop(ctx),
           child: const Text('ביטול'),
+        ),
+      ),
+    );
+  }
+
+  // ── Sort sheet ─────────────────────────────────────────────────────────────
+
+  void _showSortSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = AppTheme.primaryOf(context);
+
+    final options = [
+      (0, Icons.swap_vert_rounded, 'סדר ידני', 'סדר שנקבע על ידך'),
+      (1, Icons.sort_by_alpha_rounded, 'א ← ת', 'לפי שם בסדר עולה'),
+      (2, Icons.sort_by_alpha_rounded, 'ת ← א', 'לפי שם בסדר יורד'),
+      (3, Icons.schedule_rounded, 'אחרון שנוסף', 'החדש ביותר קודם'),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF252540) : Colors.white,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'מיון רשימה',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppTheme.textDark,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  for (final (idx, icon, title, subtitle) in options) ...[
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _sortOrder = idx);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _sortOrder == idx
+                              ? primary.withValues(alpha: 0.12)
+                              : (isDark
+                                  ? const Color(0xFF1A1A2E)
+                                  : AppTheme.surface),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _sortOrder == idx
+                                ? primary.withValues(alpha: 0.4)
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(icon,
+                                size: 22,
+                                color: _sortOrder == idx
+                                    ? primary
+                                    : AppTheme.textLight),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: _sortOrder == idx
+                                          ? primary
+                                          : (isDark
+                                              ? Colors.white
+                                              : AppTheme.textDark),
+                                    ),
+                                  ),
+                                  Text(
+                                    subtitle,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textLight),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_sortOrder == idx)
+                              Icon(Icons.check_rounded,
+                                  size: 20, color: primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -479,8 +622,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Contact list / grid ────────────────────────────────────────────────────
 
-  Widget _buildContactsList(List<AppContact> contacts) {
-    if (contacts.isEmpty) return _buildCategoryEmpty();
+  List<AppContact> _applySortOrder(List<AppContact> contacts) {
+    switch (_sortOrder) {
+      case 1: // א → ת
+        final sorted = List<AppContact>.from(contacts);
+        sorted.sort((a, b) => a.name.compareTo(b.name));
+        return sorted;
+      case 2: // ת → א
+        final sorted = List<AppContact>.from(contacts);
+        sorted.sort((a, b) => b.name.compareTo(a.name));
+        return sorted;
+      case 3: // recently added (newest first — Hive keeps insertion order, reverse it)
+        return contacts.reversed.toList();
+      default: // manual order
+        return contacts;
+    }
+  }
+
+  Widget _buildContactsList(List<AppContact> rawContacts) {
+    if (rawContacts.isEmpty) return _buildCategoryEmpty();
+    final contacts = _applySortOrder(rawContacts);
 
     if (_isListView) {
       return ListView.builder(
