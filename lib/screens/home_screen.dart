@@ -622,17 +622,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── Contact list / grid ────────────────────────────────────────────────────
 
+  // ── Sort helpers ─────────────────────────────────────────────────────────────
+
+  static bool _isHebrew(String s) {
+    if (s.isEmpty) return false;
+    final code = s.codeUnitAt(0);
+    return code >= 0x05B0 && code <= 0x05F4;
+  }
+
+  /// Hebrew names always appear before English names.
+  static int _compareHebrewFirst(String a, String b) {
+    final aH = _isHebrew(a);
+    final bH = _isHebrew(b);
+    if (aH && !bH) return -1;
+    if (!aH && bH) return 1;
+    return a.compareTo(b);
+  }
+
   List<AppContact> _applySortOrder(List<AppContact> contacts) {
     switch (_sortOrder) {
-      case 1: // א → ת
+      case 1: // א → ת  (Hebrew first)
         final sorted = List<AppContact>.from(contacts);
-        sorted.sort((a, b) => a.name.compareTo(b.name));
+        sorted.sort((a, b) => _compareHebrewFirst(a.name, b.name));
         return sorted;
-      case 2: // ת → א
+      case 2: // ת → א  (Hebrew last)
         final sorted = List<AppContact>.from(contacts);
-        sorted.sort((a, b) => b.name.compareTo(a.name));
+        sorted.sort((a, b) => _compareHebrewFirst(b.name, a.name));
         return sorted;
-      case 3: // recently added (newest first — Hive keeps insertion order, reverse it)
+      case 3: // recently added (newest first)
         return contacts.reversed.toList();
       default: // manual order
         return contacts;

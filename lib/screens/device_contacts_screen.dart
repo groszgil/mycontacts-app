@@ -87,17 +87,33 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
     }
   }
 
+  // Hebrew letters: Unicode block U+05B0–U+05F4
+  static bool _isHebrew(String s) {
+    if (s.isEmpty) return false;
+    final code = s.codeUnitAt(0);
+    return code >= 0x05B0 && code <= 0x05F4;
+  }
+
+  /// Compares two display names: Hebrew names always sort before English.
+  static int _compareHebrewFirst(String a, String b) {
+    final aH = _isHebrew(a);
+    final bH = _isHebrew(b);
+    if (aH && !bH) return -1;
+    if (!aH && bH) return 1;
+    return a.compareTo(b);
+  }
+
   List<Contact> _applySort(List<Contact> list) {
     final copy = List<Contact>.from(list);
     switch (_sortOrder) {
-      case 1: // ת→א
-        copy.sort((a, b) =>
-            (b.displayName ?? '').compareTo(a.displayName ?? ''));
+      case 1: // ת→א  (Hebrew last in reverse)
+        copy.sort((a, b) => _compareHebrewFirst(
+            b.displayName ?? '', a.displayName ?? ''));
       case 2: // by phone count (most first)
         copy.sort((a, b) => b.phones.length.compareTo(a.phones.length));
-      default: // א→ת
-        copy.sort((a, b) =>
-            (a.displayName ?? '').compareTo(b.displayName ?? ''));
+      default: // א→ת  (Hebrew first)
+        copy.sort((a, b) => _compareHebrewFirst(
+            a.displayName ?? '', b.displayName ?? ''));
     }
     return copy;
   }
@@ -430,10 +446,12 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
       final groups = <String, List<Contact>>{};
       for (final c in _filtered) {
         final name = c.displayName ?? '';
-        final key = name.isEmpty ? '#' : name[0].toUpperCase();
+        final key = name.isEmpty ? '#' : name[0];
         groups.putIfAbsent(key, () => []).add(c);
       }
-      final keys = groups.keys.toList()..sort();
+      // Sort keys: Hebrew letters first, then English
+      final keys = groups.keys.toList()
+        ..sort(_compareHebrewFirst);
       final items = <dynamic>[];
       for (final k in keys) {
         items.add(k);

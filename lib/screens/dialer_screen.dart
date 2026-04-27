@@ -52,6 +52,17 @@ String _nameToT9(String name) {
   return buf.toString();
 }
 
+/// True if any WORD in [name] has a T9 encoding that STARTS WITH [query].
+/// This matches the behaviour of the built-in Android/iOS dialer.
+bool _t9MatchesName(String name, String query) {
+  if (query.isEmpty) return false;
+  for (final word in name.trim().split(RegExp(r'\s+'))) {
+    if (word.isEmpty) continue;
+    if (_nameToT9(word).startsWith(query)) return true;
+  }
+  return false;
+}
+
 // ── Search result model ───────────────────────────────────────────────────────
 
 class _ContactMatch {
@@ -164,10 +175,7 @@ class _DialerScreenState extends State<DialerScreen> {
     // 1. App favorites (Hive) — searched first
     for (final c in StorageService.getAllContacts()) {
       if (results.length >= 5) break;
-      final t9 = _nameToT9(c.name);
-      final phonePlain =
-          c.effectivePrimaryPhone.replaceAll(RegExp(r'\D'), '');
-      if (t9.contains(_number) || phonePlain.contains(_number)) {
+      if (_t9MatchesName(c.name, _number)) {
         add(c.name, c.effectivePrimaryPhone);
       }
     }
@@ -178,11 +186,8 @@ class _DialerScreenState extends State<DialerScreen> {
       if (c.phones.isEmpty) continue;
       final name = c.displayName ?? '';
       if (name.isEmpty) continue;
-      final t9 = _nameToT9(name);
-      final rawPhone = c.phones.first.number;
-      final phonePlain = rawPhone.replaceAll(RegExp(r'\D'), '');
-      if (t9.contains(_number) || phonePlain.contains(_number)) {
-        add(name, rawPhone);
+      if (_t9MatchesName(name, _number)) {
+        add(name, c.phones.first.number);
       }
     }
 
