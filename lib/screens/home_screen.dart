@@ -36,9 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isListView = false;
   /// 0=manual, 1=א-ת (A-Z), 2=ת-א (Z-A), 3=לאחרונה נוסף
   int _sortOrder = 0;
-  /// FAB visibility — hides while scrolling down, reappears on scroll-up
-  bool _fabVisible = true;
-  double _lastScrollOffset = 0;
   /// Call-log cache: normalised phone → last-call timestamp (Android only).
   Map<String, DateTime> _callMap = {};
 
@@ -151,27 +148,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (notification.metrics.axis != Axis.vertical) {
                           return false;
                         }
-                        final px = notification.metrics.pixels;
-
-                        // Header collapse
-                        final collapsed = px > 40;
+                        final collapsed =
+                            notification.metrics.pixels > 40;
                         if (collapsed != _headerCollapsed) {
                           setState(() => _headerCollapsed = collapsed);
-                        }
-
-                        // FAB hide-on-scroll-down, show-on-scroll-up
-                        if (notification is ScrollUpdateNotification) {
-                          final delta = px - _lastScrollOffset;
-                          _lastScrollOffset = px;
-                          final shouldShow = delta < 0 || px < 60;
-                          if (shouldShow != _fabVisible) {
-                            setState(() => _fabVisible = shouldShow);
-                          }
-                        } else if (notification is ScrollEndNotification) {
-                          // Always show FAB once scrolling stops
-                          if (!_fabVisible) {
-                            setState(() => _fabVisible = true);
-                          }
                         }
                         return false;
                       },
@@ -183,7 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ),
-        floatingActionButton: _buildFAB(),
       ),
     );
   }
@@ -212,6 +191,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Text('מועדפים'),
             ),
           ),
+          // Add contact button
+          _IconBtn(
+            icon: Icons.person_add_rounded,
+            isDark: isDark,
+            onTap: _navigateToImport,
+          ),
+          const SizedBox(width: 8),
           // Search toggle
           _IconBtn(
             icon: _isSearching
@@ -682,7 +668,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_isListView) {
       return ListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 8, 0, 100),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
         itemCount: contacts.length,
         itemBuilder: (context, i) {
           final c = contacts[i];
@@ -701,7 +687,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final cols = _settings.gridColumns;
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: cols,
         mainAxisSpacing: 10,
@@ -974,30 +960,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── FAB ────────────────────────────────────────────────────────────────────
 
-  Widget _buildFAB() {
-    if (_isReordering) return const SizedBox.shrink();
-    final primary = AppTheme.primaryOf(context);
-    return AnimatedSlide(
-      offset: _fabVisible ? Offset.zero : const Offset(0, 2.5),
-      duration: const Duration(milliseconds: 280),
-      curve: _fabVisible ? Curves.easeOut : Curves.easeIn,
-      child: AnimatedOpacity(
-        opacity: _fabVisible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 220),
-        child: FloatingActionButton(
-          heroTag: 'import_fab',
-          onPressed: _navigateToImport,
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
-          elevation: 6,
-          shape: const CircleBorder(),
-          tooltip: 'הוספת איש קשר',
-          child: const Icon(Icons.person_add_rounded, size: 26),
-        ),
-      ),
-    );
-  }
-
   // ── Import device favorites (starred contacts) ────────────────────────────
 
   Future<void> _importDeviceFavorites() async {
@@ -1253,12 +1215,12 @@ class _IconBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(9),
+        padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
           color: active
               ? color
               : (isDark ? const Color(0xFF252540) : Colors.white),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(11),
           boxShadow: [
             BoxShadow(
               color: color.withValues(alpha: 0.1),
@@ -1271,7 +1233,7 @@ class _IconBtn extends StatelessWidget {
             color: active
                 ? Colors.white
                 : (isDark ? Colors.white70 : AppTheme.textDark),
-            size: 20),
+            size: 19),
       ),
     );
   }

@@ -25,6 +25,8 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
   bool _permissionDenied = false;
   // true only the very first time the user opens this screen
   bool _showingRationale = false;
+  /// Normalised phone numbers already saved in the app's favorites.
+  Set<String> _existingPhones = {};
 
   @override
   void initState() {
@@ -97,11 +99,34 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
         return aName.compareTo(bName);
       });
 
+    // Build set of normalised phones already in favorites
+    final existing = StorageService.getAllContacts();
+    final existingPhones = <String>{};
+    for (final c in existing) {
+      for (final ph in c.phones) {
+        existingPhones.add(_normalisePhone(ph));
+      }
+    }
+
     setState(() {
       _all = withPhone;
       _filtered = withPhone;
+      _existingPhones = existingPhones;
       _loading = false;
     });
+  }
+
+  String _normalisePhone(String phone) {
+    var n = phone.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+    if (n.startsWith('972') && n.length > 9) n = '0${n.substring(3)}';
+    return n;
+  }
+
+  bool _isAlreadyFavorite(Contact contact) {
+    for (final ph in contact.phones) {
+      if (_existingPhones.contains(_normalisePhone(ph.number))) return true;
+    }
+    return false;
   }
 
   void _filter(String query) {
@@ -446,7 +471,6 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
         final contact = _filtered[index];
         final name = contact.displayName ?? '';
         final phone = contact.phones.first.number;
-        // Use thumbnail for list avatars (small/fast); fullSize used on import.
         final thumbBytes = contact.photo?.thumbnail ?? contact.photo?.fullSize;
         final hasPhoto = thumbBytes != null && thumbBytes.isNotEmpty;
         final initials = _initials(name);
@@ -454,62 +478,131 @@ class _ImportContactsScreenState extends State<ImportContactsScreen> {
             ? name.codeUnitAt(0) % AppTheme.categoryColors.length
             : 0;
         final color = AppTheme.categoryColors[colorIndex];
+        final alreadyExists = _isAlreadyFavorite(contact);
+        final primary = Theme.of(context).colorScheme.primary;
 
         return ListTile(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: color.withValues(alpha: 0.3), width: 1.5),
-            ),
-            child: ClipOval(
-              child: hasPhoto
-                  ? Image.memory(thumbBytes!, fit: BoxFit.cover)
-                  : Center(
-                      child: Text(
-                        initials,
-                        style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16),
-                      ),
+          leading: Stack(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: color.withValues(alpha: 0.3), width: 1.5),
+                ),
+                child: ClipOval(
+                  child: hasPhoto
+                      ? Image.memory(thumbBytes!, fit: BoxFit.cover)
+                      : Center(
+                          child: Text(
+                            initials,
+                            style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16),
+                          ),
+                        ),
+                ),
+              ),
+              // Gold star badge when already in favorites
+              if (alreadyExists)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 3,
+                        ),
+                      ],
                     ),
-            ),
+                    child: const Icon(Icons.star_rounded,
+                        color: Color(0xFFFFC107), size: 14),
+                  ),
+                ),
+            ],
           ),
           title: Text(
             name.isEmpty ? phone : name,
             style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
+                color: alreadyExists
+                    ? AppTheme.textLight
+                    : Theme.of(context).textTheme.bodyLarge?.color,
                 fontSize: 16),
           ),
-          subtitle: name.isEmpty ? null : Text(
-            phone,
-            style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (name.isNotEmpty)
+                Text(phone,
+                    style: const TextStyle(
+                        color: AppTheme.textLight, fontSize: 13)),
+              if (alreadyExists)
+                Text(
+                  'קיים במועדפים ⭐',
+                  style: TextStyle(
+                      color: const Color(0xFFFFC107).withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600),
+                ),
+            ],
           ),
-          trailing: Builder(builder: (ctx) {
-            final primary = Theme.of(ctx).colorScheme.primary;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'הוסף',
-                style: TextStyle(
-                    color: primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
-              ),
-            );
-          }),
-          onTap: () => _selectContact(contact),
+          trailing: alreadyExists
+              ? Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text('הוסף',
+                      style: TextStyle(
+                          color: AppTheme.textLight,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
+                )
+              : Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text('הוסף',
+                      style: TextStyle(
+                          color: primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
+                ),
+          onTap: () {
+            if (alreadyExists) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      '${name.isNotEmpty ? name : phone} כבר קיים במועדפים ⭐'),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+              return;
+            }
+            _selectContact(contact);
+          },
         );
       },
     );
