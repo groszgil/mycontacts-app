@@ -36,6 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isListView = false;
   /// 0=manual, 1=א-ת (A-Z), 2=ת-א (Z-A), 3=לאחרונה נוסף
   int _sortOrder = 0;
+  /// FAB visibility — hides while scrolling down, reappears on scroll-up
+  bool _fabVisible = true;
+  double _lastScrollOffset = 0;
   /// Call-log cache: normalised phone → last-call timestamp (Android only).
   Map<String, DateTime> _callMap = {};
 
@@ -145,12 +148,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: NotificationListener<ScrollNotification>(
                       onNotification: (notification) {
-                        if (notification.metrics.axis == Axis.vertical) {
-                          final collapsed =
-                              notification.metrics.pixels > 40;
-                          if (collapsed != _headerCollapsed) {
-                            setState(
-                                () => _headerCollapsed = collapsed);
+                        if (notification.metrics.axis != Axis.vertical) {
+                          return false;
+                        }
+                        final px = notification.metrics.pixels;
+
+                        // Header collapse
+                        final collapsed = px > 40;
+                        if (collapsed != _headerCollapsed) {
+                          setState(() => _headerCollapsed = collapsed);
+                        }
+
+                        // FAB hide-on-scroll-down, show-on-scroll-up
+                        if (notification is ScrollUpdateNotification) {
+                          final delta = px - _lastScrollOffset;
+                          _lastScrollOffset = px;
+                          final shouldShow = delta < 0 || px < 60;
+                          if (shouldShow != _fabVisible) {
+                            setState(() => _fabVisible = shouldShow);
+                          }
+                        } else if (notification is ScrollEndNotification) {
+                          // Always show FAB once scrolling stops
+                          if (!_fabVisible) {
+                            setState(() => _fabVisible = true);
                           }
                         }
                         return false;
@@ -957,16 +977,24 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFAB() {
     if (_isReordering) return const SizedBox.shrink();
     final primary = AppTheme.primaryOf(context);
-    return FloatingActionButton.extended(
-      heroTag: 'import_fab',
-      onPressed: _navigateToImport,
-      backgroundColor: primary,
-      foregroundColor: Colors.white,
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      icon: const Icon(Icons.person_add_rounded),
-      label: const Text('הוספת איש קשר',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+    return AnimatedSlide(
+      offset: _fabVisible ? Offset.zero : const Offset(0, 2.5),
+      duration: const Duration(milliseconds: 280),
+      curve: _fabVisible ? Curves.easeOut : Curves.easeIn,
+      child: AnimatedOpacity(
+        opacity: _fabVisible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 220),
+        child: FloatingActionButton(
+          heroTag: 'import_fab',
+          onPressed: _navigateToImport,
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          elevation: 6,
+          shape: const CircleBorder(),
+          tooltip: 'הוספת איש קשר',
+          child: const Icon(Icons.person_add_rounded, size: 26),
+        ),
+      ),
     );
   }
 
