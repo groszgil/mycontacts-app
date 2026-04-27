@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../models/app_contact.dart';
 import '../services/storage_service.dart';
 import '../utils/theme.dart';
@@ -13,8 +14,8 @@ const Map<String, String> _kHebT9 = {
   '3': 'דהו',
   '4': 'זחט',
   '5': 'יכך',       // kaf + final kaf
-  '6': 'מםנןס',     // mem + final mem + nun + final nun + samekh
-  '7': 'עפףצץ',     // ayin + pe + final pe + tsadi + final tsadi
+  '6': 'מםנןס',     // mem, final mem, nun, final nun, samekh
+  '7': 'עפףצץ',     // ayin, pe, final pe, tsadi, final tsadi
   '8': 'קרש',
   '9': 'ת',
 };
@@ -26,18 +27,9 @@ const Map<String, String> _kEngT9 = {
 
 // Hebrew letters shown under each key
 const Map<String, String> _kKeyLetters = {
-  '1': '',
-  '2': 'אבג',
-  '3': 'דהו',
-  '4': 'זחט',
-  '5': 'יכל',
-  '6': 'מנס',
-  '7': 'עפצ',
-  '8': 'קרש',
-  '9': 'ת',
-  '0': '+',
-  '*': '',
-  '#': '',
+  '1': '',    '2': 'אבג',  '3': 'דהו',  '4': 'זחט',
+  '5': 'יכל', '6': 'מנס',  '7': 'עפצ',  '8': 'קרש',
+  '9': 'ת',   '0': '+',    '*': '',     '#': '',
 };
 
 String _charToDigit(String ch) {
@@ -60,7 +52,15 @@ String _nameToT9(String name) {
   return buf.toString();
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
+// ── Search result model ───────────────────────────────────────────────────────
+
+class _ContactMatch {
+  final String name;
+  final String phone;
+  const _ContactMatch({required this.name, required this.phone});
+}
+
+// ── Key data ──────────────────────────────────────────────────────────────────
 
 class _KeyData {
   final String digit;
@@ -79,6 +79,29 @@ class DialerScreen extends StatefulWidget {
 
 class _DialerScreenState extends State<DialerScreen> {
   String _number = '';
+
+  /// Device contacts loaded once for T9 search
+  List<Contact> _deviceContacts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceContacts();
+  }
+
+  Future<void> _loadDeviceContacts() async {
+    try {
+      final status =
+          await FlutterContacts.permissions.request(PermissionType.read);
+      final granted = status == PermissionStatus.granted ||
+          status == PermissionStatus.limited;
+      if (!granted) return;
+      final contacts = await FlutterContacts.getAll(
+        properties: {ContactProperty.phone},
+      );
+      if (mounted) setState(() => _deviceContacts = contacts);
+    } catch (_) {}
+  }
 
   // ── Actions ─────────────────────────────────────────────────────────────────
 
@@ -123,21 +146,48 @@ class _DialerScreenState extends State<DialerScreen> {
     return _number;
   }
 
-  // ── T9 contact search ────────────────────────────────────────────────────────
+  // ── T9 search — searches BOTH app favorites & device contacts ────────────────
 
-  List<AppContact> get _t9Matches {
+  List<_ContactMatch> get _t9Matches {
     if (_number.length < 2) return [];
-    final all = StorageService.getAllContacts();
-    return all.where((c) {
-      final digits = _nameToT9(c.name);
-      // Also match directly on phone number fragment
-      final phone = c.effectivePrimaryPhone.replaceAll(RegExp(r'\D'), '');
-      return digits.contains(_number) || phone.contains(_number);
-    }).take(5).toList();
-  }
+    final seen = <String>{};
+    final results = <_ContactMatch>[];
 
-  String _firstPhone(AppContact c) =>
-      c.phones.isNotEmpty ? c.phones.first : c.effectivePrimaryPhone;
+    void add(String name, String phone) {
+      if (results.length >= 5) return;
+      final key = '${name.toLowerCase()}|${phone.replaceAll(RegExp(r'\D'), '')}';
+      if (seen.contains(key)) return;
+      seen.add(key);
+      results.add(_ContactMatch(name: name, phone: phone));
+    }
+
+    // 1. App favorites (Hive) — searched first
+    for (final c in StorageService.getAllContacts()) {
+      if (results.length >= 5) break;
+      final t9 = _nameToT9(c.name);
+      final phonePlain =
+          c.effectivePrimaryPhone.replaceAll(RegExp(r'\D'), '');
+      if (t9.contains(_number) || phonePlain.contains(_number)) {
+        add(c.name, c.effectivePrimaryPhone);
+      }
+    }
+
+    // 2. Device contacts
+    for (final c in _deviceContacts) {
+      if (results.length >= 5) break;
+      if (c.phones.isEmpty) continue;
+      final name = c.displayName ?? '';
+      if (name.isEmpty) continue;
+      final t9 = _nameToT9(name);
+      final rawPhone = c.phones.first.number;
+      final phonePlain = rawPhone.replaceAll(RegExp(r'\D'), '');
+      if (t9.contains(_number) || phonePlain.contains(_number)) {
+        add(name, rawPhone);
+      }
+    }
+
+    return results;
+  }
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
@@ -237,28 +287,22 @@ class _DialerScreenState extends State<DialerScreen> {
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
                 child: matches.isEmpty
-                    ? const SizedBox(height: 8)
+                    ? const SizedBox(height: 8, width: double.infinity)
                     : SizedBox(
-                        height: 72,
+                        height: 68,
+                        width: double.infinity,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                              horizontal: 16, vertical: 6),
                           itemCount: matches.length,
                           separatorBuilder: (_, __) =>
-                              const SizedBox(width: 10),
-                          itemBuilder: (_, i) {
-                            final c = matches[i];
-                            return _T9ContactChip(
-                              contact: c,
-                              primary: primary,
-                              isDark: isDark,
-                              onCall: () {
-                                HapticFeedback.mediumImpact();
-                                LaunchHelper.makeCall(_firstPhone(c));
-                              },
-                            );
-                          },
+                              const SizedBox(width: 8),
+                          itemBuilder: (_, i) => _T9Chip(
+                            match: matches[i],
+                            primary: primary,
+                            isDark: isDark,
+                          ),
                         ),
                       ),
               ),
@@ -276,7 +320,6 @@ class _DialerScreenState extends State<DialerScreen> {
                         ],
                         onPress: _press,
                         isDark: isDark,
-                        primary: primary,
                       ),
                       const SizedBox(height: 10),
                       _KeyRow(
@@ -285,7 +328,6 @@ class _DialerScreenState extends State<DialerScreen> {
                         ],
                         onPress: _press,
                         isDark: isDark,
-                        primary: primary,
                       ),
                       const SizedBox(height: 10),
                       _KeyRow(
@@ -294,7 +336,6 @@ class _DialerScreenState extends State<DialerScreen> {
                         ],
                         onPress: _press,
                         isDark: isDark,
-                        primary: primary,
                       ),
                       const SizedBox(height: 10),
                       _KeyRow(
@@ -303,7 +344,6 @@ class _DialerScreenState extends State<DialerScreen> {
                         ],
                         onPress: _press,
                         isDark: isDark,
-                        primary: primary,
                       ),
                     ],
                   ),
@@ -377,50 +417,54 @@ class _DialerScreenState extends State<DialerScreen> {
 
 // ── T9 suggestion chip ─────────────────────────────────────────────────────────
 
-class _T9ContactChip extends StatelessWidget {
-  final AppContact contact;
+class _T9Chip extends StatelessWidget {
+  final _ContactMatch match;
   final Color primary;
   final bool isDark;
-  final VoidCallback onCall;
 
-  const _T9ContactChip({
-    required this.contact,
+  const _T9Chip({
+    required this.match,
     required this.primary,
     required this.isDark,
-    required this.onCall,
   });
 
   String get _initials {
-    final parts = contact.name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
+    final parts = match.name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts.last.isNotEmpty) {
       return '${parts.first[0]}${parts.last[0]}';
     }
-    return contact.name.isNotEmpty ? contact.name[0] : '?';
+    return match.name.isNotEmpty ? match.name[0] : '?';
+  }
+
+  String get _firstName {
+    return match.name.trim().split(RegExp(r'\s+')).first;
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onCall,
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        LaunchHelper.makeCall(match.phone);
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: primary.withValues(alpha: isDark ? 0.18 : 0.1),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-              color: primary.withValues(alpha: 0.3), width: 1),
+          borderRadius: BorderRadius.circular(22),
+          border:
+              Border.all(color: primary.withValues(alpha: 0.3), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // avatar circle
             CircleAvatar(
-              radius: 16,
-              backgroundColor: primary.withValues(alpha: 0.2),
+              radius: 15,
+              backgroundColor: primary.withValues(alpha: 0.25),
               child: Text(
                 _initials,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: primary,
                 ),
@@ -432,23 +476,22 @@ class _T9ContactChip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  contact.name,
+                  _firstName,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.white : AppTheme.textDark,
                   ),
                 ),
-                const SizedBox(height: 1),
                 Row(
                   children: [
                     Icon(Icons.call_rounded,
-                        size: 11, color: const Color(0xFF4CAF50)),
+                        size: 10, color: const Color(0xFF4CAF50)),
                     const SizedBox(width: 3),
                     Text(
-                      contact.effectivePrimaryPhone,
+                      match.phone,
                       style: const TextStyle(
-                          fontSize: 11, color: AppTheme.textLight),
+                          fontSize: 10, color: AppTheme.textLight),
                     ),
                   ],
                 ),
@@ -467,13 +510,11 @@ class _KeyRow extends StatelessWidget {
   final List<_KeyData> keys;
   final void Function(String) onPress;
   final bool isDark;
-  final Color primary;
 
   const _KeyRow({
     required this.keys,
     required this.onPress,
     required this.isDark,
-    required this.primary,
   });
 
   @override
@@ -486,7 +527,6 @@ class _KeyRow extends StatelessWidget {
                     data: k,
                     onPress: onPress,
                     isDark: isDark,
-                    primary: primary,
                   ),
                 ),
               ))
@@ -501,13 +541,11 @@ class _DialKey extends StatefulWidget {
   final _KeyData data;
   final void Function(String) onPress;
   final bool isDark;
-  final Color primary;
 
   const _DialKey({
     required this.data,
     required this.onPress,
     required this.isDark,
-    required this.primary,
   });
 
   @override
@@ -517,19 +555,14 @@ class _DialKey extends StatefulWidget {
 class _DialKeyState extends State<_DialKey> {
   bool _pressed = false;
 
-  // Light mode: iOS-style light gray; Dark mode: dark card
-  Color get _bgIdle => widget.isDark
-      ? const Color(0xFF2C2C3E)
-      : const Color(0xFFF2F2F7);
+  Color get _bgIdle =>
+      widget.isDark ? const Color(0xFF2C2C3E) : const Color(0xFFF2F2F7);
 
-  Color get _bgPressed => widget.isDark
-      ? const Color(0xFF3D3D55)
-      : const Color(0xFFDEDEE8);
+  Color get _bgPressed =>
+      widget.isDark ? const Color(0xFF3D3D55) : const Color(0xFFDEDEE8);
 
   @override
   Widget build(BuildContext context) {
-    final bg = _pressed ? _bgPressed : _bgIdle;
-
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) {
@@ -548,7 +581,7 @@ class _DialKeyState extends State<_DialKey> {
         width: 74,
         height: 74,
         decoration: BoxDecoration(
-          color: bg,
+          color: _pressed ? _bgPressed : _bgIdle,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
@@ -582,7 +615,7 @@ class _DialKeyState extends State<_DialKey> {
                     color: widget.isDark
                         ? Colors.white.withValues(alpha: 0.55)
                         : const Color(0xFF8E8E93),
-                    letterSpacing: 1.0,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),

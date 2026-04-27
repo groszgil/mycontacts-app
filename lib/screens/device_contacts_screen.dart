@@ -21,6 +21,8 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
   bool _loading = true;
   bool _permissionDenied = false;
   bool _showingRationale = false;
+  /// 0=א→ת, 1=ת→א, 2=by phone count
+  int _sortOrder = 0;
 
   @override
   void initState() {
@@ -74,32 +76,170 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
       },
     );
 
-    final sorted = contacts
-        .where((c) => c.phones.isNotEmpty)
-        .toList()
-      ..sort((a, b) =>
-          (a.displayName ?? '').compareTo(b.displayName ?? ''));
+    final list = contacts.where((c) => c.phones.isNotEmpty).toList();
 
     if (mounted) {
       setState(() {
-        _all = sorted;
-        _filtered = sorted;
+        _all = list;
+        _filtered = _applySort(list);
         _loading = false;
       });
     }
   }
 
+  List<Contact> _applySort(List<Contact> list) {
+    final copy = List<Contact>.from(list);
+    switch (_sortOrder) {
+      case 1: // ת→א
+        copy.sort((a, b) =>
+            (b.displayName ?? '').compareTo(a.displayName ?? ''));
+      case 2: // by phone count (most first)
+        copy.sort((a, b) => b.phones.length.compareTo(a.phones.length));
+      default: // א→ת
+        copy.sort((a, b) =>
+            (a.displayName ?? '').compareTo(b.displayName ?? ''));
+    }
+    return copy;
+  }
+
   void _filter(String query) {
     final q = query.trim().toLowerCase();
-    setState(() {
-      _filtered = q.isEmpty
-          ? _all
-          : _all.where((c) {
-              final name = (c.displayName ?? '').toLowerCase();
-              final phones = c.phones.map((p) => p.number).join(' ');
-              return name.contains(q) || phones.contains(q);
-            }).toList();
-    });
+    final base = q.isEmpty
+        ? _all
+        : _all.where((c) {
+            final name = (c.displayName ?? '').toLowerCase();
+            final phones = c.phones.map((p) => p.number).join(' ');
+            return name.contains(q) || phones.contains(q);
+          }).toList();
+    setState(() => _filtered = _applySort(base));
+  }
+
+  void _applySortAndRefresh() {
+    setState(() => _filtered = _applySort(_filtered));
+  }
+
+  void _showSortSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = AppTheme.primaryOf(context);
+
+    final options = [
+      (0, Icons.sort_by_alpha_rounded, 'א → ת', 'לפי שם בסדר עולה'),
+      (1, Icons.sort_by_alpha_rounded, 'ת → א', 'לפי שם בסדר יורד'),
+      (2, Icons.phone_rounded, 'לפי כמות מספרים', 'הכי הרבה מספרים קודם'),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF252540) : Colors.white,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'מיון רשימה',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppTheme.textDark,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  for (final (idx, icon, title, subtitle) in options) ...[
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _sortOrder = idx);
+                        _applySortAndRefresh();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _sortOrder == idx
+                              ? primary.withValues(alpha: 0.12)
+                              : (isDark
+                                  ? const Color(0xFF1A1A2E)
+                                  : const Color(0xFFF7F7FA)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _sortOrder == idx
+                                ? primary.withValues(alpha: 0.4)
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(icon,
+                                size: 22,
+                                color: _sortOrder == idx
+                                    ? primary
+                                    : AppTheme.textLight),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(title,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: _sortOrder == idx
+                                            ? primary
+                                            : (isDark
+                                                ? Colors.white
+                                                : AppTheme.textDark),
+                                      )),
+                                  Text(subtitle,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.textLight)),
+                                ],
+                              ),
+                            ),
+                            if (_sortOrder == idx)
+                              Icon(Icons.check_rounded,
+                                  size: 20, color: primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showActions(Contact contact) {
@@ -150,6 +290,25 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                    if (!_loading && !_permissionDenied && !_showingRationale) ...[
+                      const SizedBox(width: 6),
+                      // Sort button
+                      GestureDetector(
+                        onTap: _showSortSheet,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: _sortOrder != 0
+                                ? primary.withValues(alpha: 0.18)
+                                : primary.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.sort_rounded,
+                              color: primary, size: 20),
+                        ),
+                      ),
+                    ],
                     if (!_permissionDenied && !_showingRationale) ...[
                       const SizedBox(width: 6),
                       Tooltip(
@@ -265,35 +424,43 @@ class _DeviceContactsScreenState extends State<DeviceContactsScreen> {
   // ── Grouped contact list ─────────────────────────────────────────────────
 
   Widget _buildGroupedList() {
-    // Group contacts by first letter
-    final groups = <String, List<Contact>>{};
-    for (final c in _filtered) {
-      final name = c.displayName ?? '';
-      final key = name.isEmpty ? '#' : name[0].toUpperCase();
-      groups.putIfAbsent(key, () => []).add(c);
+    // For A-Z sort: group by first letter with section headers
+    // For other sorts: show a flat sorted list
+    if (_sortOrder == 0) {
+      final groups = <String, List<Contact>>{};
+      for (final c in _filtered) {
+        final name = c.displayName ?? '';
+        final key = name.isEmpty ? '#' : name[0].toUpperCase();
+        groups.putIfAbsent(key, () => []).add(c);
+      }
+      final keys = groups.keys.toList()..sort();
+      final items = <dynamic>[];
+      for (final k in keys) {
+        items.add(k);
+        items.addAll(groups[k]!);
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.only(bottom: 16),
+        itemCount: items.length,
+        itemBuilder: (ctx, i) {
+          final item = items[i];
+          if (item is String) return _SectionHeader(label: item);
+          return _ContactTile(
+            contact: item as Contact,
+            onTap: () => _showActions(item),
+          );
+        },
+      );
     }
-    final keys = groups.keys.toList()..sort();
 
-    // Flatten into items list (String = header, Contact = row)
-    final items = <dynamic>[];
-    for (final k in keys) {
-      items.add(k);
-      items.addAll(groups[k]!);
-    }
-
+    // Flat list for Z-A or by-phone-count
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 16),
-      itemCount: items.length,
-      itemBuilder: (ctx, i) {
-        final item = items[i];
-        if (item is String) {
-          return _SectionHeader(label: item);
-        }
-        return _ContactTile(
-          contact: item as Contact,
-          onTap: () => _showActions(item),
-        );
-      },
+      itemCount: _filtered.length,
+      itemBuilder: (ctx, i) => _ContactTile(
+        contact: _filtered[i],
+        onTap: () => _showActions(_filtered[i]),
+      ),
     );
   }
 
